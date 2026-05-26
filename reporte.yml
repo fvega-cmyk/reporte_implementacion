@@ -1,0 +1,33 @@
+name: Reporte Diario Implementación
+
+on:
+  # Diario a las 10:00 UTC = 07:00 Chile (UTC-3) en horario de invierno
+  # Si Chile cambia a UTC-4 en otra época, ajustá a "0 11 * * *"
+  schedule:
+    - cron: "0 10 * * *"
+  # Permite correrlo manual desde la pestaña Actions
+  workflow_dispatch:
+
+jobs:
+  reporte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar reporte
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+        run: python src/main.py
