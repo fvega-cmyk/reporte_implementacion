@@ -3,15 +3,15 @@ Envía el correo con Excel + PPT adjuntos (SMTP con Gmail App Password).
 
 Estrategia híbrida según peso del PPT:
 - Si peso total estimado < UMBRAL_MB → adjunta ambos archivos al correo.
-- Si peso total estimado >= UMBRAL_MB → sube el PPT a Drive (público con link)
-  y manda un link en el cuerpo.
+- Si peso total estimado >= UMBRAL_MB → sube el PPT a una Unidad Compartida
+  (Shared Drive) y manda un link en el cuerpo.
 
 Variables de entorno:
   - GMAIL_USER:                  email del remitente (ej. tunombre@sell-out.cl)
   - GMAIL_APP_PASS:              contraseña de aplicación de 16 caracteres
-  - DRIVE_CARPETA_REPORTES_ID:   ID de la carpeta padre en TU Drive donde se
-                                 subirán los PPT grandes (compartida con la
-                                 cuenta de servicio como Editor)
+  - DRIVE_CARPETA_REPORTES_ID:   ID de la UNIDAD COMPARTIDA donde se subirán
+                                 los PPT grandes. La cuenta de servicio debe
+                                 tener rol "Administrador de contenido" en ella.
 """
 import os
 import smtplib
@@ -25,48 +25,64 @@ from utils import san
 from google_clients import get_drive
 
 
-# Umbral en bytes. Gmail acepta 25 MB. Usamos 22 MB para dejar margen
-# (overhead de base64 codifica ~33% más, headers, multipart, etc).
+# Umbral en bytes. Gmail acepta 25 MB. Usamos 22 MB para dejar margen.
 UMBRAL_BYTES = 22 * 1024 * 1024
 
-# Constantes Drive
 MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 MIME_FOLDER = "application/vnd.google-apps.folder"
 
 
-def _crear_carpeta_dia(drive, padre_id, nombre):
+def _obtener_drive_id_raiz(drive, padre_id):
     """
-    Crea (o reutiliza) una subcarpeta dentro de la carpeta padre dada por ID.
-    Retorna el ID de la subcarpeta.
+    Dado un folder en una Unidad Compartida, obtiene el driveId raíz de esa unidad.
+    Es necesario para que las requests funcionen con Shared Drives.
     """
-    # Buscar si ya existe la subcarpeta del día
+    info = drive.files().get(
+        fileId=padre_id,
+        fields="id, name, driveId, mimeType",
+        supportsAllDrives=True,
+    ).execute()
+    # Si el padre ES la raíz de la Shared Drive, su 'id' ES el driveId
+    # Si es una subcarpeta dentro de la Shared Drive, viene en 'driveId'
+    return info.get("driveId", padre_id)
+
+
+def _crear_carpeta_dia(drive, padre_id, drive_id, nombre):
+    """
+    Crea (o reutiliza) una subcarpeta dentro de la unidad compartida.
+    """
     q = (
         f"name = '{nombre}' and mimeType = '{MIME_FOLDER}' "
         f"and '{padre_id}' in parents and trashed = false"
     )
     resp = drive.files().list(
-        q=q, fields="files(id, name)",
-        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        q=q,
+        fields="files(id, name)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora="drive",
+        driveId=drive_id,
     ).execute()
     archivos = resp.get("files", [])
     if archivos:
         return archivos[0]["id"]
-    # Crearla dentro del padre
     body = {
         "name": nombre,
         "mimeType": MIME_FOLDER,
         "parents": [padre_id],
     }
     nueva = drive.files().create(
-        body=body, fields="id", supportsAllDrives=True,
+        body=body,
+        fields="id",
+        supportsAllDrives=True,
     ).execute()
     return nueva["id"]
 
 
 def _subir_ppt_y_obtener_link(drive, ppt_bytes, nombre_archivo, hoy):
     """
-    Sube el PPT a Drive dentro de:
-      [carpeta padre cuyo ID viene en DRIVE_CARPETA_REPORTES_ID] / Reporte YYYYMMDD /
+    Sube el PPT a la Unidad Compartida dentro de:
+      [Unidad cuyo ID viene en DRIVE_CARPETA_REPORTES_ID] / Reporte YYYYMMDD /
     Le pone permiso 'cualquiera con el link puede ver'.
     Retorna la URL pública.
     """
@@ -74,20 +90,16 @@ def _subir_ppt_y_obtener_link(drive, ppt_bytes, nombre_archivo, hoy):
     if not padre_id:
         raise RuntimeError(
             "Falta la variable DRIVE_CARPETA_REPORTES_ID. "
-            "Cargá el ID de la carpeta 'Reportes Diarios' como secreto en GitHub."
+            "Cargá el ID de la Unidad Compartida 'Reportes Diarios' como secreto en GitHub."
         )
 
+    # Obtener el driveId raíz (necesario para Shared Drives)
+    drive_id = _obtener_drive_id_raiz(drive, padre_id)
+
     nombre_dia = f"Reporte {hoy.strftime('%Y%m%d')}"
-    carpeta_dia_id = _crear_carpeta_dia(drive, padre_id, nombre_dia)
+    carpeta_dia_id = _crear_carpeta_dia(drive, padre_id, drive_id, nombre_dia)
 
     # Subir el archivo
-    # IMPORTANTE: resumable=False es clave acá.
-    # Con resumable=True, Google verifica la cuota de la cuenta de servicio ANTES
-    # de mirar dónde se va a guardar el archivo, y como las cuentas de servicio
-    # no tienen cuota propia, falla con storageQuotaExceeded aunque el archivo
-    # vaya a una carpeta de un usuario humano.
-    # Con resumable=False, sube en una sola request y la cuota se asocia
-    # directamente al dueño de la carpeta destino.
     media = MediaIoBaseUpload(
         BytesIO(ppt_bytes), mimetype=MIME_PPTX, resumable=False,
     )
@@ -96,13 +108,14 @@ def _subir_ppt_y_obtener_link(drive, ppt_bytes, nombre_archivo, hoy):
         "parents": [carpeta_dia_id],
     }
     archivo = drive.files().create(
-        body=metadata, media_body=media,
+        body=metadata,
+        media_body=media,
         fields="id, webViewLink",
         supportsAllDrives=True,
     ).execute()
     file_id = archivo["id"]
 
-    # Darle permiso público con link
+    # Permiso 'cualquiera con el link puede ver'
     drive.permissions().create(
         fileId=file_id,
         body={"type": "anyone", "role": "reader"},
@@ -126,7 +139,6 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, destinatario=None):
     nombre_excel = f"Reporte_{nombre_campana}_{fecha_archivo}.xlsx"
     nombre_ppt = f"Fotos_{nombre_campana}_{fecha_archivo}.pptx"
 
-    # Decidir si va como adjunto o como link
     peso_total = len(excel_bytes) + len(ppt_bytes)
     peso_mb = peso_total / 1024 / 1024
     usar_link = peso_total >= UMBRAL_BYTES
