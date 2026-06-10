@@ -3,12 +3,15 @@ Envía el correo con Excel + PPT adjuntos (SMTP con Gmail App Password).
 
 Estrategia híbrida según peso del PPT:
 - Si peso total estimado < UMBRAL_MB → adjunta ambos archivos al correo.
-- Si peso total estimado >= UMBRAL_MB → sube el PPT a Drive (público con link),
-  lo borra automáticamente después de N días, y manda un link en el cuerpo.
+- Si peso total estimado >= UMBRAL_MB → sube el PPT a Drive (público con link)
+  y manda un link en el cuerpo.
 
 Variables de entorno:
-  - GMAIL_USER:     email del remitente (ej. tunombre@sell-out.cl)
-  - GMAIL_APP_PASS: contraseña de aplicación de 16 caracteres
+  - GMAIL_USER:                  email del remitente (ej. tunombre@sell-out.cl)
+  - GMAIL_APP_PASS:              contraseña de aplicación de 16 caracteres
+  - DRIVE_CARPETA_REPORTES_ID:   ID de la carpeta padre en TU Drive donde se
+                                 subirán los PPT grandes (compartida con la
+                                 cuenta de servicio como Editor)
 """
 import os
 import smtplib
@@ -17,7 +20,7 @@ from io import BytesIO
 
 from googleapiclient.http import MediaIoBaseUpload
 
-from config import SMTP_HOST, SMTP_PORT, ASUNTO_EMAIL, EMAIL_DESTINATARIO, CARPETA_REPORTES
+from config import SMTP_HOST, SMTP_PORT, ASUNTO_EMAIL, EMAIL_DESTINATARIO
 from utils import san
 from google_clients import get_drive
 
@@ -31,11 +34,16 @@ MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presen
 MIME_FOLDER = "application/vnd.google-apps.folder"
 
 
-def _obtener_o_crear_carpeta(drive, nombre, padre_id=None):
-    """Busca o crea una carpeta en Drive. Retorna el folderId."""
-    q = f"name = '{nombre}' and mimeType = '{MIME_FOLDER}' and trashed = false"
-    if padre_id:
-        q += f" and '{padre_id}' in parents"
+def _crear_carpeta_dia(drive, padre_id, nombre):
+    """
+    Crea (o reutiliza) una subcarpeta dentro de la carpeta padre dada por ID.
+    Retorna el ID de la subcarpeta.
+    """
+    # Buscar si ya existe la subcarpeta del día
+    q = (
+        f"name = '{nombre}' and mimeType = '{MIME_FOLDER}' "
+        f"and '{padre_id}' in parents and trashed = false"
+    )
     resp = drive.files().list(
         q=q, fields="files(id, name)",
         supportsAllDrives=True, includeItemsFromAllDrives=True,
@@ -43,10 +51,12 @@ def _obtener_o_crear_carpeta(drive, nombre, padre_id=None):
     archivos = resp.get("files", [])
     if archivos:
         return archivos[0]["id"]
-    # Crear
-    body = {"name": nombre, "mimeType": MIME_FOLDER}
-    if padre_id:
-        body["parents"] = [padre_id]
+    # Crearla dentro del padre
+    body = {
+        "name": nombre,
+        "mimeType": MIME_FOLDER,
+        "parents": [padre_id],
+    }
     nueva = drive.files().create(
         body=body, fields="id", supportsAllDrives=True,
     ).execute()
@@ -55,14 +65,20 @@ def _obtener_o_crear_carpeta(drive, nombre, padre_id=None):
 
 def _subir_ppt_y_obtener_link(drive, ppt_bytes, nombre_archivo, hoy):
     """
-    Sube el PPT a Drive dentro de Reportes Diarios/Reporte YYYYMMDD/
+    Sube el PPT a Drive dentro de:
+      [carpeta padre cuyo ID viene en DRIVE_CARPETA_REPORTES_ID] / Reporte YYYYMMDD /
     Le pone permiso 'cualquiera con el link puede ver'.
-    Retorna la URL pública de visualización/descarga.
+    Retorna la URL pública.
     """
-    # Estructura: Reportes Diarios / Reporte YYYYMMDD /
-    carpeta_raiz_id = _obtener_o_crear_carpeta(drive, CARPETA_REPORTES)
+    padre_id = os.environ.get("DRIVE_CARPETA_REPORTES_ID")
+    if not padre_id:
+        raise RuntimeError(
+            "Falta la variable DRIVE_CARPETA_REPORTES_ID. "
+            "Cargá el ID de la carpeta 'Reportes Diarios' como secreto en GitHub."
+        )
+
     nombre_dia = f"Reporte {hoy.strftime('%Y%m%d')}"
-    carpeta_dia_id = _obtener_o_crear_carpeta(drive, nombre_dia, carpeta_raiz_id)
+    carpeta_dia_id = _crear_carpeta_dia(drive, padre_id, nombre_dia)
 
     # Subir el archivo
     media = MediaIoBaseUpload(
@@ -74,7 +90,7 @@ def _subir_ppt_y_obtener_link(drive, ppt_bytes, nombre_archivo, hoy):
     }
     archivo = drive.files().create(
         body=metadata, media_body=media,
-        fields="id, webViewLink, webContentLink",
+        fields="id, webViewLink",
         supportsAllDrives=True,
     ).execute()
     file_id = archivo["id"]
@@ -86,7 +102,6 @@ def _subir_ppt_y_obtener_link(drive, ppt_bytes, nombre_archivo, hoy):
         supportsAllDrives=True,
     ).execute()
 
-    # Link de visualización (el usuario puede ver y descargar)
     return archivo.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
 
 
@@ -114,7 +129,6 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, destinatario=None):
     msg["From"] = f"Reporte Implementación <{gmail_user}>"
     msg["To"] = destinatario
 
-    # --- Cuerpo del correo y adjuntos según modalidad ---
     if usar_link:
         print(f"        Peso total: {peso_mb:.1f} MB → modo LINK (subiendo PPT a Drive)")
         drive = get_drive()
@@ -132,7 +146,6 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, destinatario=None):
             f"Saludos,\nSistema de Reportes"
         )
         msg.set_content(cuerpo)
-        # Solo adjuntamos el Excel
         msg.add_attachment(
             excel_bytes,
             maintype="application",
@@ -164,7 +177,6 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, destinatario=None):
             filename=nombre_ppt,
         )
 
-    # Enviar
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
         s.starttls()
         s.login(gmail_user, gmail_pass)
