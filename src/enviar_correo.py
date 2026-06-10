@@ -81,8 +81,15 @@ def _subir_ppt_y_obtener_link(drive, ppt_bytes, nombre_archivo, hoy):
     carpeta_dia_id = _crear_carpeta_dia(drive, padre_id, nombre_dia)
 
     # Subir el archivo
+    # IMPORTANTE: resumable=False es clave acá.
+    # Con resumable=True, Google verifica la cuota de la cuenta de servicio ANTES
+    # de mirar dónde se va a guardar el archivo, y como las cuentas de servicio
+    # no tienen cuota propia, falla con storageQuotaExceeded aunque el archivo
+    # vaya a una carpeta de un usuario humano.
+    # Con resumable=False, sube en una sola request y la cuota se asocia
+    # directamente al dueño de la carpeta destino.
     media = MediaIoBaseUpload(
-        BytesIO(ppt_bytes), mimetype=MIME_PPTX, resumable=True,
+        BytesIO(ppt_bytes), mimetype=MIME_PPTX, resumable=False,
     )
     metadata = {
         "name": nombre_archivo,
