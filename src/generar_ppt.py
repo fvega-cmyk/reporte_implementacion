@@ -321,11 +321,11 @@ def generar_ppt(campana, filas, hoy):
         # Calcular posiciones según cantidad real de fotos
         posiciones = _calcular_posiciones(len(rutas), placeholders_info)
 
-        # Insertar fotos
+        # Insertar fotos manteniendo su proporción dentro del área disponible
         for i, ruta in enumerate(rutas):
             if i >= len(posiciones):
                 break
-            left, top, width, height = posiciones[i]
+            area_left, area_top, area_w, area_h = posiciones[i]
             blob = buscar_foto_blob(drive, ruta)
             if blob is None:
                 print(f"      [WARN] Foto {i+1} no encontrada: {ruta}")
@@ -335,7 +335,34 @@ def generar_ppt(campana, filas, hoy):
                 if blob_normalizado is None:
                     print(f"      [SKIP] Foto {i+1} omitida (no se pudo procesar)")
                     continue
-                slide.shapes.add_picture(blob_normalizado, left, top, width=width, height=height)
+
+                # Obtener dimensiones reales de la imagen (en px) para calcular ratio
+                blob_normalizado.seek(0)
+                img_px = Image.open(blob_normalizado)
+                img_w_px, img_h_px = img_px.size
+                blob_normalizado.seek(0)  # rebobinar para que pptx pueda leerla
+
+                # Calcular el tamaño final manteniendo proporción ("fit dentro del área")
+                ratio_img = img_w_px / img_h_px
+                ratio_area = area_w / area_h
+                if ratio_img > ratio_area:
+                    # Imagen más ancha que el área: ajustar por ancho
+                    final_w = area_w
+                    final_h = int(area_w / ratio_img)
+                else:
+                    # Imagen más alta que el área: ajustar por alto
+                    final_h = area_h
+                    final_w = int(area_h * ratio_img)
+
+                # Centrar dentro del área
+                final_left = area_left + (area_w - final_w) // 2
+                final_top = area_top + (area_h - final_h) // 2
+
+                slide.shapes.add_picture(
+                    blob_normalizado,
+                    final_left, final_top,
+                    width=final_w, height=final_h,
+                )
                 print(f"      OK foto {i+1}")
             except Exception as e:
                 print(f"      [ERROR] foto {i+1}: {e}")
