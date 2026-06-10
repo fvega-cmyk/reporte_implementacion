@@ -64,13 +64,33 @@ def _aplicar_estilos_encabezado(ws, ncols, row=1):
         cell.border = BORDER
 
 
+def _normalizar_proceso(proceso):
+    """
+    Consolida variantes de Reagenda:
+    - 'Reagenda interna' → 'Reagenda'
+    - 'Reagenda externa' → 'Reagenda'
+    - 'reagenda parcial' → 'Reagenda'
+    - etc.
+    Cualquier proceso que empiece con 'Reagenda' (case-insensitive) → 'Reagenda'.
+    """
+    if not proceso:
+        return ""
+    p = str(proceso).strip()
+    if not p:
+        return ""
+    if p.lower().startswith("reagenda"):
+        return "Reagenda"
+    return p
+
+
 def _formatear_proceso(proceso, detalle):
     """
     Devuelve el texto a mostrar en la celda:
     - Si proceso es 'Rechazado' y hay detalle: 'Rechazado (detalle)'
+    - Reagenda interna/externa → 'Reagenda' (sin apellidos)
     - Cualquier otro caso: solo el proceso (sin detalle).
     """
-    proc = (proceso or "").strip()
+    proc = _normalizar_proceso(proceso)
     if not proc:
         return ""
     det = (detalle or "").strip()
@@ -169,9 +189,15 @@ def construir_resumen(ws, filas, campana):
         ws.cell(row=fila_actual, column=4, value=s["fecha_entrega"]).alignment = CENTER
 
         for i, material in enumerate(materiales, start=5):
-            valor = s["procesos_por_material"].get(material, "")
+            valor = s["procesos_por_material"].get(material)
+            # Si la sala no tiene este material asociado, mostrar N/A
+            if not valor:
+                valor = "N/A"
             cell = ws.cell(row=fila_actual, column=i, value=valor)
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            # Estilo gris claro para N/A
+            if valor == "N/A":
+                cell.font = Font(color="999999", italic=True)
 
         # Zebra striping
         if (fila_actual - fila_header) % 2 == 0:
@@ -204,11 +230,21 @@ def construir_bbdd(ws, filas):
     ws.append(headers)
     _aplicar_estilos_encabezado(ws, len(headers), row=1)
 
+    # Columnas que se vuelven vacías a propósito (las completa el cliente)
+    COLUMNAS_VACIAS = {"REAGENDA", "FECHA REAGENDA"}
+
     # Filas
     for r_off, row in enumerate(filas, start=2):
         for c, (header_txt, idx_key, formato) in enumerate(COLUMNAS_BBDD, start=1):
             idx = IDX[idx_key]
             valor_crudo = row[idx] if idx < len(row) else ""
+
+            # Las columnas REAGENDA y FECHA REAGENDA se dejan vacías
+            # para que el cliente pueda completarlas
+            if header_txt in COLUMNAS_VACIAS:
+                cell = ws.cell(row=r_off, column=c, value="")
+                cell.alignment = CENTER
+                continue
 
             if formato == "fecha":
                 cell = ws.cell(row=r_off, column=c, value=fmt(valor_crudo))
@@ -226,6 +262,9 @@ def construir_bbdd(ws, filas):
                     ws.cell(row=r_off, column=c, value="")
             else:
                 valor = valor_crudo if valor_crudo not in (None,) else ""
+                # Normalizar Reagenda en la columna PROCESO
+                if header_txt == "PROCESO":
+                    valor = _normalizar_proceso(valor)
                 cell = ws.cell(row=r_off, column=c, value=valor)
                 cell.alignment = LEFT
 
