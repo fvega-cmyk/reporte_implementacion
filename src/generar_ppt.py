@@ -288,54 +288,67 @@ def generar_ppt(campana, filas, hoy):
     _reemplazar_texto(portada, "[CAMPAÑA]", campana)
     _reemplazar_texto(portada, "[CLIENTE]", cliente)
 
-    # ---- AGRUPAR POR SALA ----
-    salas_map = {}
-    for row in filas:
-        key = f"{row[IDX['COD']] or ''}__{row[IDX['NOMBRE_SALA']] or ''}"
-        salas_map.setdefault(key, []).append(row)
+    # ---- ORDENAR FILAS POR CÓDIGO NUMÉRICO DE SALA ----
+    # Cada fila genera una slide (sala+material). Si la misma sala aparece
+    # con varios materiales, son varias slides distintas.
+    def _orden_codigo(row):
+        cod = str(row[IDX["COD"]] or "").strip()
+        # Intentar parsear como número para orden numérico real
+        # Si tiene prefijo (ej. "J633"), separar parte alfa y parte numérica
+        import re
+        m = re.match(r"^([A-Za-z]*)(\d+)?", cod)
+        if m:
+            prefix = m.group(1) or ""
+            numero = int(m.group(2)) if m.group(2) else 0
+            return (prefix, numero)
+        return (cod, 0)
 
-    sala_keys = list(salas_map.keys())
-    print(f"  Salas: {len(sala_keys)}")
+    filas_ordenadas = sorted(filas, key=_orden_codigo)
+    print(f"  Slides a generar: {len(filas_ordenadas)}")
 
     # Slide template de sala (la segunda en el template)
     template_sala = pres.slides[1]
 
-    # Lista de slides ya creadas para sala
+    # Lista de slides ya creadas para sala (la primera reutiliza template_sala)
     slides_de_sala = [template_sala]
 
-    # Duplicar para las salas adicionales (la primera reutiliza template_sala)
-    for _ in range(len(sala_keys) - 1):
+    # Duplicar para las filas adicionales
+    for _ in range(len(filas_ordenadas) - 1):
         nueva = _duplicar_slide(pres, template_sala)
         slides_de_sala.append(nueva)
 
-    # ---- LLENAR CADA SLIDE DE SALA ----
-    for sala_idx, key in enumerate(sala_keys):
-        filas_sala = salas_map[key]
-        r0 = filas_sala[0]
-        slide = slides_de_sala[sala_idx]
-        print(f"    Sala {sala_idx + 1}/{len(sala_keys)}: {key}")
+    # ---- LLENAR CADA SLIDE (1 slide por fila = sala+material) ----
+    for fila_idx, row in enumerate(filas_ordenadas):
+        slide = slides_de_sala[fila_idx]
+        cod = str(row[IDX["COD"]] or "")
+        nombre_sala = str(row[IDX["NOMBRE_SALA"]] or "")
+        material = str(row[IDX["MATERIAL"]] or "")
+        print(f"    Slide {fila_idx + 1}/{len(filas_ordenadas)}: {cod} {nombre_sala} | {material}")
 
         # Reemplazar textos
         _reemplazar_texto(
             slide, "[CÓD.] - [NOMBRE SALA]",
-            f"{r0[IDX['COD']] or ''} - {r0[IDX['NOMBRE_SALA']] or ''}",
+            f"{cod} - {nombre_sala}",
         )
         _reemplazar_texto(
             slide, "[DIRECCIÓN], [COMUNA] - [REGION]",
-            f"{r0[IDX['DIRECCION']] or ''}, {r0[IDX['COMUNA']] or ''} - {r0[IDX['REGION']] or ''}",
+            f"{row[IDX['DIRECCION']] or ''}, {row[IDX['COMUNA']] or ''} - {row[IDX['REGION']] or ''}",
         )
-        _reemplazar_texto(slide, "[MATERIAL]", r0[IDX["MATERIAL"]] or "")
-        _reemplazar_texto(slide, "[CANTIDAD]", r0[IDX["CANTIDAD"]] or "")
-        _reemplazar_texto(slide, "[PROCESO]", r0[IDX["PROCESO"]] or "")
-        _reemplazar_texto(slide, "[FECHA ENTREGA]", fmt(r0[IDX["FECHA_ENTREGA"]]))
+        _reemplazar_texto(slide, "[MATERIAL]", material)
+        _reemplazar_texto(slide, "[CANTIDAD]", str(row[IDX["CANTIDAD"]] or ""))
+        # Normalizar Reagenda interna/externa → Reagenda
+        proceso_raw = str(row[IDX["PROCESO"]] or "").strip()
+        if proceso_raw.lower().startswith("reagenda"):
+            proceso_raw = "Reagenda"
+        _reemplazar_texto(slide, "[PROCESO]", proceso_raw)
+        _reemplazar_texto(slide, "[FECHA ENTREGA]", fmt(row[IDX["FECHA_ENTREGA"]]))
 
-        # Recolectar rutas únicas (max 4)
+        # Recolectar rutas de las 4 fotos de ESTA fila específica (max 4)
         rutas = []
-        for row in filas_sala:
-            for fi in [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"], IDX["FOTO4"]]:
-                ruta = (row[fi] or "").strip()
-                if ruta and ruta not in rutas:
-                    rutas.append(ruta)
+        for fi in [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"], IDX["FOTO4"]]:
+            ruta = (row[fi] or "").strip()
+            if ruta and ruta not in rutas:
+                rutas.append(ruta)
         rutas = rutas[:4]
 
         # Localizar placeholders de foto y sus posiciones
@@ -348,6 +361,10 @@ def generar_ppt(campana, filas, hoy):
         # Borrar todos los placeholders de foto (los reemplazaremos por imágenes)
         for sh in placeholders.values():
             _limpiar_placeholder_foto(sh)
+
+        # Si no hay fotos, la slide queda con los datos solamente (sin imágenes)
+        if not rutas:
+            continue
 
         # Calcular posiciones según cantidad real de fotos
         posiciones = _calcular_posiciones(len(rutas), placeholders_info)
