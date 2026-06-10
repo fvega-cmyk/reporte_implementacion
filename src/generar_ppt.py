@@ -200,8 +200,11 @@ def _calcular_posiciones(n_fotos, placeholders_info):
 
 def _duplicar_slide(pres, slide_origen):
     """
-    Duplica una slide. python-pptx no tiene .duplicate() nativo, así que
-    copiamos el XML manualmente.
+    Duplica una slide. python-pptx no tiene .duplicate() nativo.
+    
+    IMPORTANTE: además de copiar las shapes (XML), hay que copiar las
+    'relationships' de imágenes incrustadas (el logo, fotos, etc.).
+    Si no, las imágenes aparecen como referencias rotas en la slide nueva.
     """
     blank_layout = slide_origen.slide_layout
     nueva = pres.slides.add_slide(blank_layout)
@@ -209,10 +212,38 @@ def _duplicar_slide(pres, slide_origen):
     for shape in list(nueva.shapes):
         sp = shape._element
         sp.getparent().remove(sp)
-    # Copiar shapes del slide origen
+
+    # Construir mapa de rId del slide origen → rId del slide nuevo
+    # para imágenes, links y otros recursos referenciados.
+    rels_origen = slide_origen.part.rels
+    rid_map = {}  # {rId_viejo: rId_nuevo}
+    for rId, rel in rels_origen.items():
+        if rel.is_external:
+            # Hyperlinks externos (target_ref es la URL)
+            nuevo_rId = nueva.part.relate_to(rel.target_ref, rel.reltype, is_external=True)
+        else:
+            # Imágenes y otros recursos internos: reusar el mismo target_part
+            nuevo_rId = nueva.part.relate_to(rel.target_part, rel.reltype)
+        rid_map[rId] = nuevo_rId
+
+    # Copiar shapes del slide origen, traduciendo rIds en el XML
+    from lxml import etree
+    NS_R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+    NS_R_LINK = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}link"
+    NS_R_ID = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+
     for shape in slide_origen.shapes:
-        el = shape._element
-        nueva.shapes._spTree.insert_element_before(copy.deepcopy(el), "p:extLst")
+        el = copy.deepcopy(shape._element)
+        # Recorrer todos los atributos 'r:embed', 'r:link', 'r:id' del subárbol
+        # y reemplazar el rId viejo por el nuevo
+        for descendant in el.iter():
+            for attr_name in (NS_R, NS_R_LINK, NS_R_ID):
+                if attr_name in descendant.attrib:
+                    viejo = descendant.attrib[attr_name]
+                    if viejo in rid_map:
+                        descendant.attrib[attr_name] = rid_map[viejo]
+        nueva.shapes._spTree.insert_element_before(el, "p:extLst")
+
     return nueva
 
 
