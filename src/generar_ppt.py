@@ -29,9 +29,9 @@ from config import IDX, TEMPLATE_PPT_ID
 from utils import fmt, san, buscar_foto_blob
 from google_clients import get_drive
 
-# Configuración de compresión de imágenes (más agresiva)
-MAX_LADO_PX = 1400       # máximo en el lado más largo (antes 1600)
-CALIDAD_JPEG = 75        # antes 82, ahora 75 (sigue viéndose perfecto en PPT)
+# Configuración de compresión de imágenes (más agresiva para PPTs grandes)
+MAX_LADO_PX = 1100       # máximo en el lado más largo (antes 1400)
+CALIDAD_JPEG = 65        # antes 75, ahora 65 (sigue viéndose bien en pantalla)
 
 
 def _normalizar_imagen(blob):
@@ -344,8 +344,17 @@ def generar_ppt(campana, filas, hoy):
         _reemplazar_texto(slide, "[FECHA ENTREGA]", fmt(row[IDX["FECHA_ENTREGA"]]))
 
         # Recolectar rutas de las 4 fotos de ESTA fila específica (max 4)
+        # IMPORTANTE: si el PROCESO es 'Realizado', omitimos la FOTO 4
+        # (suele ser redundante con las anteriores y reduce el peso del PPT).
+        proceso_norm = proceso_raw.strip().lower()
+        es_realizado = proceso_norm == "realizado"
+        if es_realizado:
+            campos_fotos = [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"]]  # solo 3
+        else:
+            campos_fotos = [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"], IDX["FOTO4"]]
+
         rutas = []
-        for fi in [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"], IDX["FOTO4"]]:
+        for fi in campos_fotos:
             ruta = (row[fi] or "").strip()
             if ruta and ruta not in rutas:
                 rutas.append(ruta)
