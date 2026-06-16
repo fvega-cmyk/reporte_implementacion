@@ -1,7 +1,11 @@
 """
-Orquestador del reporte diario.
-Equivalente a generarReporteDiario() + procesarFotosYEmail() de Apps Script,
-pero en un solo proceso sin límites de tiempo.
+Orquestador del reporte.
+
+Dos modos:
+  python src/main.py            → modo ACTUALIZADOR (solo sube/actualiza Drive)
+  python src/main.py --enviar   → modo NOTIFICADOR (sube/actualiza Drive + manda correo)
+
+El modo actualizador corre cada hora (11-20h). El notificador corre 1 vez al día.
 """
 import sys
 import time
@@ -11,13 +15,18 @@ import traceback
 from leer_sheets import cargar_datos_del_dia
 from generar_excel import generar_excel
 from generar_ppt import generar_ppt
+from subir_a_drive import subir_reportes
 from enviar_correo import enviar_email
+from config import IDX
 
 
 def main():
+    enviar = "--enviar" in sys.argv
+    modo = "NOTIFICADOR (Drive + correo)" if enviar else "ACTUALIZADOR (solo Drive)"
+
     inicio = time.time()
     hoy = date.today()
-    print(f"=== Reporte diario {hoy.isoformat()} ===")
+    print(f"=== Reporte {hoy.isoformat()} | modo: {modo} ===")
 
     headers, grupos = cargar_datos_del_dia(hoy)
     if not grupos:
@@ -29,16 +38,27 @@ def main():
         print(f"\n--- Procesando campaña: {campana} ({len(filas)} filas) ---")
         t0 = time.time()
         try:
-            print("  [1/3] Generando Excel...")
+            # Cliente: lo tomamos de la primera fila (siempre está poblado)
+            cliente = str(filas[0][IDX["CLIENTE"]] or "SIN CLIENTE").strip()
+            print(f"  Cliente: {cliente}")
+
+            print("  [1/4] Generando Excel...")
             excel_bytes = generar_excel(campana, filas, headers, hoy)
             print(f"        OK ({len(excel_bytes)/1024:.1f} KB)")
 
-            print("  [2/3] Generando PPT con fotos...")
+            print("  [2/4] Generando PPT con fotos...")
             ppt_bytes = generar_ppt(campana, filas, hoy)
             print(f"        OK ({len(ppt_bytes)/1024:.1f} KB)")
 
-            print("  [3/3] Enviando correo...")
-            enviar_email(campana, hoy, excel_bytes, ppt_bytes)
+            print("  [3/4] Subiendo/actualizando en Drive...")
+            links = subir_reportes(cliente, campana, excel_bytes, ppt_bytes)
+            print(f"        OK carpeta: {links['carpeta']}")
+
+            if enviar:
+                print("  [4/4] Enviando correo...")
+                enviar_email(campana, hoy, excel_bytes, ppt_bytes, links)
+            else:
+                print("  [4/4] (modo actualizador, no se envía correo)")
 
             print(f"  [OK] {campana} terminado en {time.time()-t0:.1f}s")
         except Exception as e:
