@@ -59,7 +59,7 @@ FILL_RECHAZADO = PatternFill("solid", fgColor="C00000")    # rojo intenso
 FONT_RECHAZADO = Font(color="FFFFFF", bold=True)           # texto blanco
 FILL_REALIZADO = PatternFill("solid", fgColor="00B050")    # verde
 FONT_REALIZADO = Font(color="FFFFFF", bold=True)           # texto blanco
-FILL_ENTREGADO = PatternFill("solid", fgColor="2E75B6")    # azul
+FILL_ENTREGADO = PatternFill("solid", fgColor="00B050")    # azul
 FONT_ENTREGADO = Font(color="FFFFFF", bold=True)           # texto blanco
 FONT_NA = Font(color="999999", italic=True)                # gris itálica
 
