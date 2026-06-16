@@ -25,7 +25,7 @@ except ImportError:
 
 from googleapiclient.http import MediaIoBaseDownload
 
-from config import IDX, TEMPLATE_PPT_ID
+from config import IDX, TEMPLATE_PPT_ID, CARPETA_TEMPLATES_ID, PREFIJO_TEMPLATE
 from utils import fmt, san, buscar_foto_blob
 from google_clients import get_drive
 
@@ -96,11 +96,47 @@ def _normalizar_imagen(blob):
         return None
 
 
-def _descargar_template_como_pptx():
+def _buscar_template_id_por_cliente(drive, cliente):
+    """
+    Busca un template específico del cliente en la carpeta de templates.
+    Nombre esperado: "Template_Reporte_{Cliente}" (ej. "Template_Reporte_Softys").
+    Si lo encuentra → devuelve su ID.
+    Si no → devuelve TEMPLATE_PPT_ID (el genérico "Sell Out").
+    """
+    cliente_limpio = (cliente or "").strip()
+    if not cliente_limpio:
+        return TEMPLATE_PPT_ID
+
+    nombre_buscado = f"{PREFIJO_TEMPLATE}{cliente_limpio}"
+    nombre_q = nombre_buscado.replace("'", "\\'")
+    q = (
+        f"name = '{nombre_q}' and '{CARPETA_TEMPLATES_ID}' in parents "
+        f"and trashed = false"
+    )
+    try:
+        resp = drive.files().list(
+            q=q,
+            fields="files(id, name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        archivos = resp.get("files", [])
+        if archivos:
+            print(f"  Template específico encontrado: '{archivos[0]['name']}'")
+            return archivos[0]["id"]
+        else:
+            print(f"  Sin template específico para '{cliente_limpio}', uso el genérico (Sell Out)")
+            return TEMPLATE_PPT_ID
+    except Exception as e:
+        print(f"  [WARN] Error buscando template de '{cliente_limpio}': {e}. Uso el genérico.")
+        return TEMPLATE_PPT_ID
+
+
+def _descargar_template_como_pptx(template_id=None):
     """Exporta el Google Slides template a .pptx en memoria."""
     drive = get_drive()
     req = drive.files().export_media(
-        fileId=TEMPLATE_PPT_ID,
+        fileId=template_id or TEMPLATE_PPT_ID,
         mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
     buf = BytesIO()
@@ -276,11 +312,12 @@ def generar_ppt(campana, filas, hoy):
     Equivalente a generarSlides() en Apps Script.
     """
     drive = get_drive()
-    template_buf = _descargar_template_como_pptx()
+    cliente = str(filas[0][IDX["CLIENTE"]] or "")
+    template_id = _buscar_template_id_por_cliente(drive, cliente)
+    template_buf = _descargar_template_como_pptx(template_id)
     pres = Presentation(template_buf)
 
     fecha_str = hoy.strftime("%d/%m/%Y")
-    cliente = str(filas[0][IDX["CLIENTE"]] or "")
 
     # ---- PORTADA (slide 0) ----
     portada = pres.slides[0]
