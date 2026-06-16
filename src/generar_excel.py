@@ -59,7 +59,7 @@ FILL_RECHAZADO = PatternFill("solid", fgColor="C00000")    # rojo intenso
 FONT_RECHAZADO = Font(color="FFFFFF", bold=True)           # texto blanco
 FILL_REALIZADO = PatternFill("solid", fgColor="00B050")    # verde
 FONT_REALIZADO = Font(color="FFFFFF", bold=True)           # texto blanco
-FILL_ENTREGADO = PatternFill("solid", fgColor="00B050")    # azul
+FILL_ENTREGADO = PatternFill("solid", fgColor="2E75B6")    # azul
 FONT_ENTREGADO = Font(color="FFFFFF", bold=True)           # texto blanco
 FONT_NA = Font(color="999999", italic=True)                # gris itálica
 
@@ -133,6 +133,9 @@ def construir_resumen(ws, filas, campana):
     filas = salas, columnas = materiales (dinámicos), valores = PROCESO (texto).
     """
     # ---- Encabezado superior ----
+    # Quitar las líneas de cuadrícula (solo en esta hoja Resumen)
+    ws.sheet_view.showGridLines = False
+
     ws["A1"] = f"Reporte Diario de Implementación"
     ws["A1"].font = Font(size=14, bold=True, color="1F3864")
     ws.merge_cells("A1:F1")
