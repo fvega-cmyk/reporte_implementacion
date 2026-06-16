@@ -343,13 +343,15 @@ def generar_ppt(campana, filas, hoy):
         _reemplazar_texto(slide, "[PROCESO]", proceso_raw)
         _reemplazar_texto(slide, "[FECHA ENTREGA]", fmt(row[IDX["FECHA_ENTREGA"]]))
 
-        # Recolectar rutas de las 4 fotos de ESTA fila específica (max 4)
-        # IMPORTANTE: si el PROCESO es 'Realizado', omitimos la FOTO 4
-        # (suele ser redundante con las anteriores y reduce el peso del PPT).
+        # Recolectar rutas de las fotos de ESTA fila según el PROCESO:
+        # - Realizado → solo 3 fotos (FOTO 4 suele ser redundante)
+        # - Rechazado → solo 1 foto (basta la evidencia del rechazo)
+        # - Otros → hasta 4 fotos
         proceso_norm = proceso_raw.strip().lower()
-        es_realizado = proceso_norm == "realizado"
-        if es_realizado:
-            campos_fotos = [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"]]  # solo 3
+        if proceso_norm == "realizado":
+            campos_fotos = [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"]]  # 3
+        elif proceso_norm == "rechazado":
+            campos_fotos = [IDX["FOTO1"]]  # solo 1
         else:
             campos_fotos = [IDX["FOTO1"], IDX["FOTO2"], IDX["FOTO3"], IDX["FOTO4"]]
 
