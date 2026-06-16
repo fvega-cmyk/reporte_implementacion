@@ -17,8 +17,15 @@ CARPETA_PADRE = "Control Interno"
 CARPETA_FOTOS_RAIZ = "Fotos Implementación"
 
 # IDs de templates (Google Slides + Google Sheets en Drive)
-TEMPLATE_PPT_ID = "1DhZFRZpknziQqdwJdtw5OVjWoV5O3u5yr5rVQjGmU3I"
+TEMPLATE_PPT_ID = "1DhZFRZpknziQqdwJdtw5OVjWoV5O3u5yr5rVQjGmU3I"  # genérico "Sell Out" (fallback)
 TEMPLATE_EXCEL_ID = "1ULHh7FbNyMrue32wFjZs4RFqK9Ab-ZICnt_yxm_-6og"
+
+# Carpeta de Drive donde viven los templates por cliente.
+# El código busca "Template_Reporte_{Cliente}" dentro de esta carpeta.
+# Si no encuentra uno específico, usa TEMPLATE_PPT_ID (el genérico Sell Out).
+CARPETA_TEMPLATES_ID = "1ojipqO8-SC_qSFDT16fwoGkQBRjR87S7"
+# Prefijo de los nombres de template. Resultado: "Template_Reporte_Softys"
+PREFIJO_TEMPLATE = "Template_Reporte_"
 
 # ============================================================
 # ÍNDICES DE COLUMNAS (espejo de IDX en tu Apps Script)
