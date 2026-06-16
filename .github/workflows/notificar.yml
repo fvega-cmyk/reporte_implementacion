@@ -1,0 +1,32 @@
+name: Notificar Reportes (diario)
+
+on:
+  # Diario a las 11:00 Chile (UTC-3 invierno → 14:00 UTC)
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+jobs:
+  notificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Actualizar Drive + enviar correo
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          DRIVE_CARPETA_REPORTES_ID: ${{ secrets.DRIVE_CARPETA_REPORTES_ID }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+        run: python src/main.py --enviar
