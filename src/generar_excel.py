@@ -54,6 +54,34 @@ THIN = Side(border_style="thin", color="BFBFBF")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 LINK_FONT = Font(name="Calibri", size=11, color="0563C1", underline="single")
 
+# Colores de formato condicional para los estados en el Resumen
+FILL_RECHAZADO = PatternFill("solid", fgColor="C00000")    # rojo intenso
+FONT_RECHAZADO = Font(color="FFFFFF", bold=True)           # texto blanco
+FILL_REALIZADO = PatternFill("solid", fgColor="00B050")    # verde
+FONT_REALIZADO = Font(color="FFFFFF", bold=True)           # texto blanco
+FILL_ENTREGADO = PatternFill("solid", fgColor="2E75B6")    # azul
+FONT_ENTREGADO = Font(color="FFFFFF", bold=True)           # texto blanco
+FONT_NA = Font(color="999999", italic=True)                # gris itálica
+
+
+def _estilo_por_estado(valor):
+    """
+    Devuelve (fill, font) según el texto del estado.
+    Retorna (None, None) si no hay estilo especial.
+    """
+    if not valor:
+        return None, None
+    v = valor.strip().lower()
+    if v == "n/a":
+        return None, FONT_NA
+    if v.startswith("rechazado"):
+        return FILL_RECHAZADO, FONT_RECHAZADO
+    if v == "realizado":
+        return FILL_REALIZADO, FONT_REALIZADO
+    if v.startswith("entregado pdv"):
+        return FILL_ENTREGADO, FONT_ENTREGADO
+    return None, None
+
 
 def _aplicar_estilos_encabezado(ws, ncols, row=1):
     for c in range(1, ncols + 1):
@@ -145,6 +173,8 @@ def construir_resumen(ws, filas, campana):
                 "cod": cod,
                 "nombre": row[IDX["NOMBRE_SALA"]] or "",
                 "comuna": row[IDX["COMUNA"]] or "",
+                "region": row[IDX["REGION"]] or "",
+                "fecha_tentativa": "",
                 "fecha_entrega": "",
                 "procesos_por_material": {},
             }
@@ -152,6 +182,9 @@ def construir_resumen(ws, filas, campana):
         # Tomar la primera fecha_entrega no vacía
         if not sala["fecha_entrega"] and row[IDX["FECHA_ENTREGA"]]:
             sala["fecha_entrega"] = fmt(row[IDX["FECHA_ENTREGA"]])
+        # Tomar la primera fecha_tentativa no vacía
+        if not sala["fecha_tentativa"] and row[IDX["FECHA_TENTATIVA"]]:
+            sala["fecha_tentativa"] = fmt(row[IDX["FECHA_TENTATIVA"]])
 
         material = (row[IDX["MATERIAL"]] or "").strip()
         if not material:
@@ -172,12 +205,17 @@ def construir_resumen(ws, filas, campana):
             print(f"          ... y {len(duplicados) - 5} más")
 
     # ---- Encabezados de la tabla ----
-    headers = ["Código", "Nombre Sala", "Comuna", "Fecha Entrega"] + materiales
+    # Columnas fijas: Código, Nombre Sala, Comuna, Región, Fecha Tentativa, Fecha Entrega
+    headers = ["Código", "Nombre Sala", "Comuna", "Región",
+               "Fecha Tentativa", "Fecha Entrega"] + materiales
     ncols = len(headers)
     fila_header = 7
     for c, h in enumerate(headers, start=1):
         ws.cell(row=fila_header, column=c, value=h)
     _aplicar_estilos_encabezado(ws, ncols, row=fila_header)
+
+    # Los materiales ahora empiezan en la columna 7 (antes 5)
+    COL_INICIO_MATERIALES = 7
 
     # ---- Volcar las filas ----
     fila_actual = fila_header + 1
@@ -186,22 +224,27 @@ def construir_resumen(ws, filas, campana):
         ws.cell(row=fila_actual, column=1, value=s["cod"]).alignment = CENTER
         ws.cell(row=fila_actual, column=2, value=s["nombre"]).alignment = LEFT
         ws.cell(row=fila_actual, column=3, value=s["comuna"]).alignment = LEFT
-        ws.cell(row=fila_actual, column=4, value=s["fecha_entrega"]).alignment = CENTER
+        ws.cell(row=fila_actual, column=4, value=s["region"]).alignment = LEFT
+        ws.cell(row=fila_actual, column=5, value=s["fecha_tentativa"]).alignment = CENTER
+        ws.cell(row=fila_actual, column=6, value=s["fecha_entrega"]).alignment = CENTER
 
-        for i, material in enumerate(materiales, start=5):
+        for i, material in enumerate(materiales, start=COL_INICIO_MATERIALES):
             valor = s["procesos_por_material"].get(material)
             # Si la sala no tiene este material asociado, mostrar N/A
             if not valor:
                 valor = "N/A"
             cell = ws.cell(row=fila_actual, column=i, value=valor)
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            # Estilo gris claro para N/A
-            if valor == "N/A":
-                cell.font = Font(color="999999", italic=True)
+            # Formato condicional por estado (rojo/verde/azul/gris)
+            fill, font = _estilo_por_estado(valor)
+            if fill is not None:
+                cell.fill = fill
+            if font is not None:
+                cell.font = font
 
-        # Zebra striping
+        # Zebra striping (solo en las columnas fijas, para no pisar los colores de estado)
         if (fila_actual - fila_header) % 2 == 0:
-            for c in range(1, ncols + 1):
+            for c in range(1, COL_INICIO_MATERIALES):
                 ws.cell(row=fila_actual, column=c).fill = ALT_FILL
         for c in range(1, ncols + 1):
             ws.cell(row=fila_actual, column=c).border = BORDER
@@ -211,9 +254,11 @@ def construir_resumen(ws, filas, campana):
     ws.column_dimensions["A"].width = 12   # Código
     ws.column_dimensions["B"].width = 32   # Nombre Sala
     ws.column_dimensions["C"].width = 18   # Comuna
-    ws.column_dimensions["D"].width = 14   # Fecha Entrega
+    ws.column_dimensions["D"].width = 18   # Región
+    ws.column_dimensions["E"].width = 14   # Fecha Tentativa
+    ws.column_dimensions["F"].width = 14   # Fecha Entrega
     # Columnas de materiales: ancho según el nombre (con un mínimo de 20 y máximo de 40)
-    for i, mat in enumerate(materiales, start=5):
+    for i, mat in enumerate(materiales, start=COL_INICIO_MATERIALES):
         ancho = max(20, min(40, len(mat) + 2))
         ws.column_dimensions[get_column_letter(i)].width = ancho
 
