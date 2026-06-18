@@ -41,28 +41,30 @@ def _get_drive_id(drive, padre_id):
     return info.get("driveId", padre_id)
 
 
-def _buscar_o_crear_carpeta(drive, padre_id, drive_id, nombre):
-    """
-    Busca una subcarpeta por nombre dentro de padre_id. Si no existe, la crea.
-    Retorna el ID de la subcarpeta.
-    """
-    # Escapar comillas simples en el nombre para la query
+def _buscar_carpeta(drive, padre_id, drive_id, nombre):
+    """Busca una subcarpeta por nombre. Retorna el ID o None (no crea)."""
     nombre_q = nombre.replace("'", "\\'")
     q = (
         f"name = '{nombre_q}' and mimeType = '{MIME_FOLDER}' "
         f"and '{padre_id}' in parents and trashed = false"
     )
     resp = drive.files().list(
-        q=q,
-        fields="files(id, name)",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True,
-        corpora="drive",
-        driveId=drive_id,
+        q=q, fields="files(id, name)",
+        supportsAllDrives=True, includeItemsFromAllDrives=True,
+        corpora="drive", driveId=drive_id,
     ).execute()
     archivos = resp.get("files", [])
-    if archivos:
-        return archivos[0]["id"]
+    return archivos[0]["id"] if archivos else None
+
+
+def _buscar_o_crear_carpeta(drive, padre_id, drive_id, nombre):
+    """
+    Busca una subcarpeta por nombre dentro de padre_id. Si no existe, la crea.
+    Retorna el ID de la subcarpeta.
+    """
+    existente = _buscar_carpeta(drive, padre_id, drive_id, nombre)
+    if existente:
+        return existente
     body = {
         "name": nombre,
         "mimeType": MIME_FOLDER,
@@ -162,3 +164,62 @@ def subir_reportes(cliente, campana, excel_bytes, ppt_bytes):
     link_carpeta = f"https://drive.google.com/drive/folders/{carpeta_campana}"
 
     return {"excel": link_excel, "ppt": link_ppt, "carpeta": link_carpeta}
+
+
+def _descargar_archivo(drive, file_id):
+    """Descarga el contenido binario de un archivo de Drive."""
+    from googleapiclient.http import MediaIoBaseDownload
+    req = drive.files().get_media(fileId=file_id, supportsAllDrives=True)
+    buf = BytesIO()
+    downloader = MediaIoBaseDownload(buf, req)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def obtener_reportes_existentes(cliente, campana):
+    """
+    Busca en Drive los reportes YA generados (por el actualizador) de una campaña
+    y devuelve sus bytes + links, SIN regenerarlos.
+
+    Retorna dict:
+      {"excel_bytes":..., "ppt_bytes":..., "links": {...}}  si los encuentra
+      None  si no existen todavía (ej. el actualizador aún no corrió)
+    """
+    padre_id = os.environ.get("DRIVE_CARPETA_REPORTES_ID")
+    if not padre_id:
+        raise RuntimeError("Falta DRIVE_CARPETA_REPORTES_ID.")
+
+    drive = get_drive()
+    drive_id = _get_drive_id(drive, padre_id)
+
+    cliente_limpio = (cliente or "SIN CLIENTE").strip()
+    campana_limpia = (campana or "SIN CAMPAÑA").strip()
+
+    # Navegar la estructura SIN crear (si no existe, devolvemos None)
+    carpeta_cliente = _buscar_carpeta(drive, padre_id, drive_id, cliente_limpio)
+    if not carpeta_cliente:
+        return None
+    carpeta_campana = _buscar_carpeta(drive, carpeta_cliente, drive_id, campana_limpia)
+    if not carpeta_campana:
+        return None
+
+    nombre_excel = f"Reporte_{san(campana)}.xlsx"
+    nombre_ppt = f"Fotos_{san(campana)}.pptx"
+
+    excel_id = _buscar_archivo(drive, carpeta_campana, drive_id, nombre_excel)
+    ppt_id = _buscar_archivo(drive, carpeta_campana, drive_id, nombre_ppt)
+    if not excel_id or not ppt_id:
+        return None
+
+    excel_bytes = _descargar_archivo(drive, excel_id)
+    ppt_bytes = _descargar_archivo(drive, ppt_id)
+
+    links = {
+        "excel": f"https://drive.google.com/file/d/{excel_id}/view",
+        "ppt": f"https://drive.google.com/file/d/{ppt_id}/view",
+        "carpeta": f"https://drive.google.com/drive/folders/{carpeta_campana}",
+    }
+    return {"excel_bytes": excel_bytes, "ppt_bytes": ppt_bytes, "links": links}
