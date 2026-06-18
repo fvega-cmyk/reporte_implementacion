@@ -22,7 +22,13 @@ from config import IDX
 
 def main():
     enviar = "--enviar" in sys.argv
-    modo = "NOTIFICADOR (Drive + correo)" if enviar else "ACTUALIZADOR (solo Drive)"
+    enviar_externo = "--enviar-externo" in sys.argv
+    if enviar_externo:
+        modo = "NOTIFICADOR EXTERNO (Drive + correo a clientes)"
+    elif enviar:
+        modo = "NOTIFICADOR INTERNO (Drive + correo interno)"
+    else:
+        modo = "ACTUALIZADOR (solo Drive)"
 
     inicio = time.time()
     hoy = date.today()
@@ -54,9 +60,12 @@ def main():
             links = subir_reportes(cliente, campana, excel_bytes, ppt_bytes)
             print(f"        OK carpeta: {links['carpeta']}")
 
-            if enviar:
-                print("  [4/4] Enviando correo...")
-                enviar_email(campana, hoy, excel_bytes, ppt_bytes, links)
+            if enviar_externo:
+                print("  [4/4] Enviando correo EXTERNO...")
+                enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=cliente, tipo="externo")
+            elif enviar:
+                print("  [4/4] Enviando correo interno...")
+                enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=cliente, tipo="interno")
             else:
                 print("  [4/4] (modo actualizador, no se envía correo)")
 
