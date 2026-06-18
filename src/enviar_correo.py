@@ -1,11 +1,15 @@
 """
-Envía el correo informativo diario.
+Envía el correo informativo en formato HTML. Dos tipos:
+
+  - "interno": diario. Va a correos fijos + correos del cliente (todos en To).
+               Lleva la firma de correo automático interno.
+  - "externo": solo lunes. Va al fijo externo (To) + clientes en copia visible (CC).
+               Sin firma interna. Solo se envía para clientes con config externa.
 
 Los archivos YA fueron subidos/actualizados en Drive por subir_a_drive.py.
-Este módulo solo arma y manda el correo:
-- Si el peso total (Excel + PPT) es < UMBRAL → adjunta ambos archivos.
-- Si es >= UMBRAL → adjunta solo el Excel (si entra) y pone el link del PPT.
-- Siempre incluye el link a la carpeta de Drive de la campaña.
+- Si el peso total (Excel + PPT) es < UMBRAL → adjunta ambos.
+- Si es >= UMBRAL → adjunta solo el Excel (si entra) y deja el PPT por link.
+- Siempre incluye los links a Drive (carpeta, Excel, PPT).
 
 Variables de entorno:
   - GMAIL_USER:     email del remitente
@@ -15,27 +19,161 @@ import os
 import smtplib
 from email.message import EmailMessage
 
-from config import SMTP_HOST, SMTP_PORT, ASUNTO_EMAIL, EMAIL_DESTINATARIO
+from config import (
+    SMTP_HOST, SMTP_PORT, ASUNTO_EMAIL, EMAIL_DESTINATARIO,
+    CORREOS_FIJOS, CORREOS_POR_CLIENTE, CORREOS_IGNORAR,
+    CORREOS_FIJOS_EXTERNO, CORREOS_POR_CLIENTE_EXTERNO,
+)
 from utils import san
 
 # Gmail acepta 25 MB. Margen a 22 MB.
 UMBRAL_BYTES = 22 * 1024 * 1024
-# Para el Excel solo, margen individual
 UMBRAL_EXCEL = 20 * 1024 * 1024
 
+# Paleta Sell Out
+AZUL = "#1F3864"
+GRIS_TEXTO = "#333333"
+GRIS_SUAVE = "#666666"
 
-def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, destinatario=None):
+
+def _dedupe(correos):
+    """Quita duplicados (case-insensitive), ignorados y vacíos. Conserva orden."""
+    vistos = set()
+    final = []
+    for correo in correos:
+        c = (correo or "").strip().lower()
+        if not c or c in CORREOS_IGNORAR or c in vistos:
+            continue
+        vistos.add(c)
+        final.append(correo.strip())
+    return final
+
+
+def _construir_html(campana, fecha_str, links, mostrar_firma=True):
+    """Arma el cuerpo HTML del correo."""
+    firma = ""
+    if mostrar_firma:
+        firma = f"""
+      <hr style="border:none;border-top:1px solid #e3e8ef;margin:24px 0 12px;">
+      <p style="margin:0;font-size:12px;color:{GRIS_SUAVE};">
+        Este es un correo automático del Sistema de Reportes de Sell Out.
+      </p>"""
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;
+              font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+              color:{GRIS_TEXTO};line-height:1.55;">
+
+    <div style="background-color:{AZUL};border-radius:10px 10px 0 0;padding:22px 28px;">
+      <div style="color:#ffffff;font-size:13px;letter-spacing:1px;
+                  text-transform:uppercase;opacity:0.85;">
+        Reporte Diario de Implementación
+      </div>
+      <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:4px;">
+        {campana}
+      </div>
+    </div>
+
+    <div style="background-color:#ffffff;border:1px solid #e3e8ef;border-top:none;
+                border-radius:0 0 10px 10px;padding:28px;">
+
+      <p style="margin:0 0 14px;">Estimado equipo,</p>
+
+      <p style="margin:0 0 18px;">
+        Adjunto reportes de implementación de la campaña
+        <strong>{campana}</strong> actualizado al <strong>{fecha_str}</strong>.
+      </p>
+
+      <p style="margin:0 0 8px;font-weight:600;color:{AZUL};">Se incluyen:</p>
+      <ol style="margin:0 0 20px;padding-left:22px;">
+        <li style="margin-bottom:4px;">Excel con resumen y detalle.</li>
+        <li>PPT con fotos.</li>
+      </ol>
+
+      <p style="margin:0 0 12px;">
+        Los reportes están disponibles y actualizados en los siguientes links:
+      </p>
+
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr><td style="padding:8px 0;">
+          <a href="{links['carpeta']}"
+             style="display:inline-block;background-color:{AZUL};color:#ffffff;
+                    text-decoration:none;padding:10px 18px;border-radius:6px;
+                    font-weight:600;font-size:14px;">📁 CARPETA {campana}</a>
+        </td></tr>
+        <tr><td style="padding:8px 0;">
+          <a href="{links['excel']}"
+             style="display:inline-block;background-color:#107C41;color:#ffffff;
+                    text-decoration:none;padding:10px 18px;border-radius:6px;
+                    font-weight:600;font-size:14px;">📊 EXCEL {campana}</a>
+        </td></tr>
+        <tr><td style="padding:8px 0;">
+          <a href="{links['ppt']}"
+             style="display:inline-block;background-color:#C43E1C;color:#ffffff;
+                    text-decoration:none;padding:10px 18px;border-radius:6px;
+                    font-weight:600;font-size:14px;">🖼️ FOTOS {campana}</a>
+        </td></tr>
+      </table>
+
+      <p style="margin:0;">Saludos.</p>
+{firma}
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+def _texto_plano(campana, fecha_str, links):
+    return (
+        f"Estimado equipo,\n\n"
+        f"Adjunto reportes de implementación de la campaña {campana} "
+        f"actualizado al {fecha_str}.\n\n"
+        f"Se incluyen:\n"
+        f"1. Excel con resumen y detalle.\n"
+        f"2. PPT con fotos.\n\n"
+        f"Los reportes están disponibles y actualizados en los siguientes links:\n"
+        f"- CARPETA {campana}: {links['carpeta']}\n"
+        f"- EXCEL {campana}: {links['excel']}\n"
+        f"- FOTOS {campana}: {links['ppt']}\n\n"
+        f"Saludos."
+    )
+
+
+def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None, tipo="interno"):
     """
-    links: dict con {"excel": url, "ppt": url, "carpeta": url} de subir_a_drive.
+    tipo: "interno" (diario) o "externo" (lunes, a clientes en CC).
+    Devuelve True si se envió, False si se omitió.
     """
     fecha_str = hoy.strftime("%d/%m/%Y")
     fecha_archivo = hoy.strftime("%Y%m%d")
-    destinatario = destinatario or EMAIL_DESTINATARIO
+    cliente_limpio = (cliente or "").strip()
 
     gmail_user = os.environ.get("GMAIL_USER")
     gmail_pass = os.environ.get("GMAIL_APP_PASS")
     if not gmail_user or not gmail_pass:
         raise RuntimeError("Faltan variables GMAIL_USER / GMAIL_APP_PASS")
+
+    # --- Resolver destinatarios según tipo ---
+    cc = []
+    if tipo == "externo":
+        clientes_ext = _dedupe(CORREOS_POR_CLIENTE_EXTERNO.get(cliente_limpio, []))
+        if not clientes_ext:
+            print(f"        [EXTERNO] '{cliente_limpio}' sin destinatarios externos → se omite")
+            return False
+        to = _dedupe(CORREOS_FIJOS_EXTERNO)
+        cc = clientes_ext
+        mostrar_firma = False
+    else:
+        to = _dedupe(list(CORREOS_FIJOS) + CORREOS_POR_CLIENTE.get(cliente_limpio, []))
+        if not to:
+            to = [EMAIL_DESTINATARIO]
+        mostrar_firma = True
+
+    print(f"        [{tipo.upper()}] To: {', '.join(to)}" + (f" | CC: {', '.join(cc)}" if cc else ""))
 
     nombre_campana = san(campana)
     nombre_excel = f"Reporte_{nombre_campana}_{fecha_archivo}.xlsx"
@@ -48,63 +186,30 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, destinatario=None)
     msg = EmailMessage()
     msg["Subject"] = f"{ASUNTO_EMAIL} {campana} | {fecha_str}"
     msg["From"] = f"Reporte Implementación <{gmail_user}>"
-    msg["To"] = destinatario
+    msg["To"] = ", ".join(to)
+    if cc:
+        msg["Cc"] = ", ".join(cc)
 
-    # Pie común con los links permanentes de Drive
-    pie_links = (
-        f"\nLos reportes también están siempre disponibles y actualizados en Drive:\n"
-        f"- Carpeta de la campaña: {links['carpeta']}\n"
-        f"- Excel: {links['excel']}\n"
-        f"- PPT de fotos: {links['ppt']}\n"
-    )
+    msg.set_content(_texto_plano(campana, fecha_str, links))
+    msg.add_alternative(_construir_html(campana, fecha_str, links, mostrar_firma), subtype="html")
 
     if adjuntar_todo:
         print(f"        Peso total: {peso_mb:.1f} MB → ADJUNTA ambos")
-        cuerpo = (
-            f"Estimado equipo,\n\n"
-            f"Adjunto el reporte diario de implementación del {fecha_str}.\n\n"
-            f"Campaña: {campana}\n\n"
-            f"Se incluyen:\n"
-            f"- Excel con resumen y detalle\n"
-            f"- PPT con fotos\n"
-            f"{pie_links}\n"
-            f"Saludos,\nSistema de Reportes"
-        )
-        msg.set_content(cuerpo)
-        msg.add_attachment(
-            excel_bytes, maintype="application",
-            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=nombre_excel,
-        )
-        msg.add_attachment(
-            ppt_bytes, maintype="application",
-            subtype="vnd.openxmlformats-officedocument.presentationml.presentation",
-            filename=nombre_ppt,
-        )
+        msg.add_attachment(excel_bytes, maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=nombre_excel)
+        msg.add_attachment(ppt_bytes, maintype="application",
+            subtype="vnd.openxmlformats-officedocument.presentationml.presentation", filename=nombre_ppt)
     else:
-        print(f"        Peso total: {peso_mb:.1f} MB → ADJUNTA solo Excel + link PPT")
-        cuerpo = (
-            f"Estimado equipo,\n\n"
-            f"Adjunto el reporte diario de implementación del {fecha_str}.\n\n"
-            f"Campaña: {campana}\n\n"
-            f"Se incluyen:\n"
-            f"- Excel con resumen y detalle (adjunto)\n"
-            f"- PPT con fotos (por tamaño, descargar desde el link):\n"
-            f"  {links['ppt']}\n"
-            f"{pie_links}\n"
-            f"Saludos,\nSistema de Reportes"
-        )
-        msg.set_content(cuerpo)
-        # Adjuntar el Excel solo si entra
+        print(f"        Peso total: {peso_mb:.1f} MB → ADJUNTA solo Excel (PPT por link)")
         if len(excel_bytes) < UMBRAL_EXCEL:
-            msg.add_attachment(
-                excel_bytes, maintype="application",
-                subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                filename=nombre_excel,
-            )
+            msg.add_attachment(excel_bytes, maintype="application",
+                subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=nombre_excel)
 
+    # Todos los destinatarios reales (To + CC) para el envío
+    todos = to + cc
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
         s.starttls()
         s.login(gmail_user, gmail_pass)
-        s.send_message(msg)
-    print(f"  [EMAIL OK] enviado a {destinatario}")
+        s.send_message(msg, to_addrs=todos)
+    print(f"  [EMAIL OK] ({tipo}) enviado a {len(todos)} destinatario(s)")
+    return True
