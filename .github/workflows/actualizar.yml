@@ -1,11 +1,11 @@
 name: Actualizar Reportes (cada hora)
 
 on:
-  # Cada hora de 12:00 a 20:00 Chile (UTC-3 invierno → 15:00 a 23:00 UTC).
-  # El de las 11:00 lo cubre el workflow "Notificar" (que también actualiza Drive).
-  # Si Chile pasa a UTC-4, los horarios se corren 1 hora; ajustar si hace falta.
+  # Cada hora de 11:00 a 20:00 Chile (UTC-3 invierno → 14:00 a 23:00 UTC).
+  # La corrida de las 11:00 deja los archivos frescos ANTES del notificador (11:30).
+  # Si Chile pasa a UTC-4 (verano), correr los horarios 1 hora.
   schedule:
-    - cron: "0 15-23 * * *"
+    - cron: "0 14-23 * * *"
   workflow_dispatch:
 
 jobs:
@@ -15,17 +15,14 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
-
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-
       - name: Instalar dependencias
         run: pip install -r requirements.txt
-
-      - name: Actualizar reportes en Drive (sin correo)
+      - name: Generar y subir reportes a Drive (sin correo)
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           DRIVE_CARPETA_REPORTES_ID: ${{ secrets.DRIVE_CARPETA_REPORTES_ID }}
