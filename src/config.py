@@ -26,7 +26,7 @@ CORREOS_FIJOS = [
 # El nombre del cliente debe coincidir con la columna CLIENTE de la planilla.
 CORREOS_POR_CLIENTE = {
     "Mondelez":            ["fvega@sell-out.cl"],
-    "Softys":              ["fvega@sell-out.cl", "jparraguez@sell-out.cl],
+    "Softys":              ["fvega@sell-out.cl", "jparraguez@sell-out.cl"],
     "Unilever":            ["dperera@sell-out.cl", "mjcarreno@sell-out.cl", "cleon@sell-out.cl"],
     "Andina":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "avidal@sell-out.cl"],
     "Sofruco":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
