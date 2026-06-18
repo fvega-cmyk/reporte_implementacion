@@ -98,22 +98,30 @@ def _normalizar_imagen(blob):
 
 def _buscar_template_id_por_cliente(drive, cliente):
     """
-    Busca un template específico del cliente en la carpeta de templates.
-    Nombre esperado: "Template_Reporte_{Cliente}" (ej. "Template_Reporte_Softys").
-    Si lo encuentra → devuelve su ID.
-    Si no → devuelve TEMPLATE_PPT_ID (el genérico "Sell Out").
+    Busca un template específico del cliente. Nombre esperado:
+    "Template_Reporte_{Cliente}" (ej. "Template_Reporte_Softys").
+
+    Estrategia (en orden):
+    1. Buscar por nombre DENTRO de la carpeta de templates.
+    2. Si no aparece, buscar por nombre en TODO el Drive accesible (fallback,
+       por si la carpeta no está compartida con la cuenta de servicio).
+    3. Si tampoco, usar el genérico TEMPLATE_PPT_ID (Sell Out).
     """
     cliente_limpio = (cliente or "").strip()
     if not cliente_limpio:
+        print("  [TEMPLATE] Cliente vacío → uso genérico (Sell Out)")
         return TEMPLATE_PPT_ID
 
     nombre_buscado = f"{PREFIJO_TEMPLATE}{cliente_limpio}"
     nombre_q = nombre_buscado.replace("'", "\\'")
-    q = (
-        f"name = '{nombre_q}' and '{CARPETA_TEMPLATES_ID}' in parents "
-        f"and trashed = false"
-    )
+    print(f"  [TEMPLATE] Buscando '{nombre_buscado}'...")
+
+    # --- Intento 1: dentro de la carpeta de templates ---
     try:
+        q = (
+            f"name = '{nombre_q}' and '{CARPETA_TEMPLATES_ID}' in parents "
+            f"and trashed = false"
+        )
         resp = drive.files().list(
             q=q,
             fields="files(id, name)",
@@ -122,14 +130,32 @@ def _buscar_template_id_por_cliente(drive, cliente):
         ).execute()
         archivos = resp.get("files", [])
         if archivos:
-            print(f"  Template específico encontrado: '{archivos[0]['name']}'")
+            print(f"  [TEMPLATE] ✓ Encontrado en carpeta: '{archivos[0]['name']}' ({archivos[0]['id']})")
             return archivos[0]["id"]
         else:
-            print(f"  Sin template específico para '{cliente_limpio}', uso el genérico (Sell Out)")
-            return TEMPLATE_PPT_ID
+            print(f"  [TEMPLATE] No está en la carpeta. Intento búsqueda global...")
     except Exception as e:
-        print(f"  [WARN] Error buscando template de '{cliente_limpio}': {e}. Uso el genérico.")
-        return TEMPLATE_PPT_ID
+        print(f"  [TEMPLATE] Error buscando en carpeta: {e}. Intento búsqueda global...")
+
+    # --- Intento 2: búsqueda global por nombre (sin restricción de carpeta) ---
+    try:
+        q2 = f"name = '{nombre_q}' and trashed = false"
+        resp2 = drive.files().list(
+            q=q2,
+            fields="files(id, name, parents)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        archivos2 = resp2.get("files", [])
+        if archivos2:
+            print(f"  [TEMPLATE] ✓ Encontrado (global): '{archivos2[0]['name']}' ({archivos2[0]['id']})")
+            return archivos2[0]["id"]
+    except Exception as e:
+        print(f"  [TEMPLATE] Error en búsqueda global: {e}")
+
+    # --- Fallback: genérico ---
+    print(f"  [TEMPLATE] ✗ No se encontró '{nombre_buscado}'. Uso genérico (Sell Out).")
+    return TEMPLATE_PPT_ID
 
 
 def _descargar_template_como_pptx(template_id=None):
@@ -279,6 +305,32 @@ def _duplicar_slide(pres, slide_origen):
                     if viejo in rid_map:
                         descendant.attrib[attr_name] = rid_map[viejo]
         nueva.shapes._spTree.insert_element_before(el, "p:extLst")
+
+    # ---- Copiar el FONDO (background) de la slide ----
+    # El fondo vive en <p:cSld><p:bg>...</p:bg>. python-pptx no lo copia al
+    # crear la slide nueva (que hereda el fondo del layout). Si la slide
+    # template tiene un fondo propio, hay que copiarlo para que todas las
+    # slides se vean idénticas.
+    NS_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+    csld_origen = slide_origen._element.find(f"{NS_P}cSld")
+    csld_nueva = nueva._element.find(f"{NS_P}cSld")
+    if csld_origen is not None and csld_nueva is not None:
+        bg_origen = csld_origen.find(f"{NS_P}bg")
+        if bg_origen is not None:
+            # Quitar un bg existente en la nueva (si lo hubiera)
+            bg_nueva_existente = csld_nueva.find(f"{NS_P}bg")
+            if bg_nueva_existente is not None:
+                csld_nueva.remove(bg_nueva_existente)
+            # El <p:bg> debe ir como primer hijo de <p:cSld>
+            bg_copia = copy.deepcopy(bg_origen)
+            # Traducir rIds del fondo (por si usa una imagen de fondo)
+            for descendant in bg_copia.iter():
+                for attr_name in (NS_R, NS_R_LINK, NS_R_ID):
+                    if attr_name in descendant.attrib:
+                        viejo = descendant.attrib[attr_name]
+                        if viejo in rid_map:
+                            descendant.attrib[attr_name] = rid_map[viejo]
+            csld_nueva.insert(0, bg_copia)
 
     return nueva
 
