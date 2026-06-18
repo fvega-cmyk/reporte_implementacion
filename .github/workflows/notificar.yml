@@ -1,29 +1,29 @@
-name: Notificar Reportes (diario)
+name: Notificar Interno (diario)
 
 on:
-  # Diario a las 11:00 Chile (UTC-3 invierno → 14:00 UTC)
+  # Diario a las 11:30 Chile (UTC-3 invierno → 14:30 UTC).
+  # Corre 30 min después del actualizador de las 11:00, así los archivos
+  # en Drive ya están frescos y el notificador solo los descarga (rápido).
+  # Si Chile pasa a UTC-4 (verano), ajustar a "30 15 * * *".
   schedule:
-    - cron: "0 14 * * *"
+    - cron: "30 14 * * *"
   workflow_dispatch:
 
 jobs:
   notificar:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
-
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-
       - name: Instalar dependencias
         run: pip install -r requirements.txt
-
-      - name: Actualizar Drive + enviar correo
+      - name: Descargar de Drive + enviar correo interno
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           DRIVE_CARPETA_REPORTES_ID: ${{ secrets.DRIVE_CARPETA_REPORTES_ID }}
