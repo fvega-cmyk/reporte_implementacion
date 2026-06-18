@@ -1,11 +1,12 @@
 name: Notificar Interno (diario)
 
 on:
-  # Chile UTC-4: 11:30 Chile = 15:30 UTC.
-  # Corre 30 min después del actualizador de las 11:00 (15:00 UTC).
-  # (Si Chile cambia a UTC-3 en verano, usar "30 14 * * *".)
+  # Chile UTC-4: 15:00 Chile = 19:00 UTC.
+  # El actualizador de las 14:00 ya dejó los archivos frescos en Drive,
+  # así que el notificador solo los descarga y envía (rápido).
+  # (Si Chile cambia a UTC-3 en verano, usar "0 18 * * *".)
   schedule:
-    - cron: "30 15 * * *"
+    - cron: "0 19 * * *"
   workflow_dispatch:
 
 jobs:
