@@ -9,8 +9,70 @@ Espejo de las constantes CONFIG e IDX de tu Apps Script.
 SHEET_ID = "1c6qE_qtcNkMfL6j3g_CZo8MbuX4f2DmhoXAYZlhrfkM"
 HOJA_DATOS = "Actividades"
 
-EMAIL_DESTINATARIO = "fvega@sell-out.cl"
+EMAIL_DESTINATARIO = "fvega@sell-out.cl"   # fallback / pruebas
 ASUNTO_EMAIL = "Reporte Diario Implementacion -"
+
+# ============================================================
+# DISTRIBUCIÓN DE CORREOS (correo interno)
+# ============================================================
+# Correos que reciben TODAS las campañas, sin importar el cliente.
+CORREOS_FIJOS = [
+    "bbaeza@sell-out.cl",
+    "jparraguez@sell-out.cl",
+    "fnunez@sell-out.cl",
+]
+
+# Correos que se SUMAN según el CLIENTE de la campaña.
+# El nombre del cliente debe coincidir con la columna CLIENTE de la planilla.
+CORREOS_POR_CLIENTE = {
+    "Mondelez":            ["msaavedra@sell-out.cl", "erojas@sell-out.cl"],
+    "Softys":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Unilever":            ["dperera@sell-out.cl", "mjcarreno@sell-out.cl", "cleon@sell-out.cl"],
+    "Andina":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "avidal@sell-out.cl"],
+    "Sofruco":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Wild Food":           ["msaavedra@sell-out.cl", "erojas@sell-out.cl"],
+    "Softys Professional": ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Kraft":               ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "scanga@sell-out.cl"],
+    "Agrosuper":           ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "scanga@sell-out.cl", "lvaliente@sell-out.cl"],
+    "Ariztía":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "scanga@sell-out.cl", "dperera@sell-out.cl"],
+    "NotCo":               ["msaavedra@sell-out.cl", "erojas@sell-out.cl"],
+    "Cleaner":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Kimberly Clark":      ["msaavedra@sell-out.cl", "erojas@sell-out.cl"],
+    "BIC":                 ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Agricovial":          ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Krispy Kreme":        ["msaavedra@sell-out.cl", "erojas@sell-out.cl"],
+    "CCU":                 ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl"],
+    "CCU Nestlé":          ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl"],
+    "CCU Pepsico":         ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl"],
+    "CCU Carozzi":         ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Gourmet":             ["scanga@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl"],
+    "Eucerin":             ["cchamorro@motionx.cl"],
+    # Clientes pendientes de configurar: NO se agregan destinatarios (solo van los fijos)
+    "Prosud":              [],
+    "Natura":              [],
+    "Crocs":               [],
+}
+
+# Correos placeholder que deben ignorarse si aparecieran en alguna lista.
+CORREOS_IGNORAR = {"pendiente@sell-out.cl"}
+
+# ============================================================
+# DISTRIBUCIÓN DE CORREOS (correo EXTERNO - clientes)
+# ============================================================
+# Se envía solo los lunes. Va en copia visible (CC) a los clientes.
+# Solo se envía para clientes que estén en CORREOS_POR_CLIENTE_EXTERNO.
+CORREOS_FIJOS_EXTERNO = [
+    "fvega@sell-out.cl",
+]
+
+CORREOS_POR_CLIENTE_EXTERNO = {
+    "Softys": [
+        "ctoledo@softys.com",
+        "ctoledo@softysla.com",
+        "pmunoz@sell-out.cl",
+        "gcastillo@sell-out.cl",
+    ],
+}
 
 CARPETA_REPORTES = "Reportes Diarios"
 CARPETA_PADRE = "Control Interno"
