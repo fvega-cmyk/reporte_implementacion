@@ -17,16 +17,16 @@ ASUNTO_EMAIL = "Reporte Diario Implementacion -"
 # ============================================================
 # Correos que reciben TODAS las campañas, sin importar el cliente.
 CORREOS_FIJOS = [
-    "bbaeza@sell-out.cl",
-    "jparraguez@sell-out.cl",
-    "fnunez@sell-out.cl",
+    "fvega@sell-out.cl",
+    "fvega@sell-out.cl",
+    "fvega@sell-out.cl",
 ]
 
 # Correos que se SUMAN según el CLIENTE de la campaña.
 # El nombre del cliente debe coincidir con la columna CLIENTE de la planilla.
 CORREOS_POR_CLIENTE = {
-    "Mondelez":            ["msaavedra@sell-out.cl", "erojas@sell-out.cl"],
-    "Softys":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Mondelez":            ["fvega@sell-out.cl"],
+    "Softys":              ["fvega@sell-out.cl", "jparraguez@sell-out.cl],
     "Unilever":            ["dperera@sell-out.cl", "mjcarreno@sell-out.cl", "cleon@sell-out.cl"],
     "Andina":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "avidal@sell-out.cl"],
     "Sofruco":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
