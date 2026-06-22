@@ -3,12 +3,12 @@ Orquestador del reporte.
 
 Modos:
   python src/main.py                   → ACTUALIZADOR: genera Excel+PPT y sube a Drive.
-  python src/main.py --enviar          → NOTIFICADOR INTERNO: descarga de Drive y manda correo interno.
-  python src/main.py --enviar-externo  → NOTIFICADOR EXTERNO: descarga de Drive y manda correo externo (lunes).
+  python src/main.py --enviar          → NOTIFICADOR INTERNO: regenera fresco, sube y manda correo interno.
+  python src/main.py --enviar-externo  → NOTIFICADOR EXTERNO: regenera fresco, sube y manda correo externo (lunes).
 
-Los notificadores NO regeneran los archivos: descargan lo último que dejó el
-actualizador en Drive (rápido). Si por alguna razón no existen en Drive, los
-regeneran como fallback (red de seguridad).
+Los notificadores SIEMPRE regeneran los archivos frescos antes de enviar, para
+garantizar que el correo lleve datos del momento (sin depender de que el
+actualizador horario haya corrido, ya que el cron de GitHub es errático).
 """
 import sys
 import time
@@ -18,7 +18,7 @@ import traceback
 from leer_sheets import cargar_datos_del_dia
 from generar_excel import generar_excel
 from generar_ppt import generar_ppt
-from subir_a_drive import subir_reportes, obtener_reportes_existentes
+from subir_a_drive import subir_reportes
 from enviar_correo import enviar_email
 from config import IDX
 
@@ -78,20 +78,11 @@ def main():
                 print(f"  [OK] {campana} actualizado en {time.time()-t0:.1f}s")
                 continue
 
-            # MODO NOTIFICADOR: intentar descargar de Drive (rápido)
-            print("  [1/2] Descargando reportes desde Drive...")
-            datos = obtener_reportes_existentes(cliente, campana)
-
-            if datos is None:
-                # Fallback: no existen en Drive todavía → generarlos
-                print("        No estaban en Drive. Generando (fallback)...")
-                excel_bytes, ppt_bytes, links = _generar_y_subir(campana, filas, headers, hoy)
-            else:
-                excel_bytes = datos["excel_bytes"]
-                ppt_bytes = datos["ppt_bytes"]
-                links = datos["links"]
-                print(f"        OK descargado (Excel {len(excel_bytes)/1024:.1f} KB, "
-                      f"PPT {len(ppt_bytes)/1024:.1f} KB)")
+            # MODO NOTIFICADOR: SIEMPRE regenera fresco antes de enviar.
+            # Así el correo lleva datos del momento, sin depender de que el
+            # actualizador horario haya corrido (el cron de GitHub es errático).
+            print("  [1/2] Generando reportes frescos y subiendo a Drive...")
+            excel_bytes, ppt_bytes, links = _generar_y_subir(campana, filas, headers, hoy)
 
             print("  [2/2] Enviando correo...")
             enviar_email(campana, hoy, excel_bytes, ppt_bytes, links,
