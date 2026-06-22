@@ -1,12 +1,18 @@
 name: Actualizar Reportes (cada hora)
 
 on:
-  # Chile está en UTC-4. Para 11:00–20:00 Chile → 15:00–00:00 UTC.
-  # 15-23 cubre 11:00 a 19:00 Chile; el 0 agrega las 20:00 Chile.
-  # (Si Chile cambia a UTC-3 en verano, restar 1 a cada hora UTC.)
+  # 1) Disparo externo desde cron-job.org (principal, puntual).
+  #    cron-job.org llama a la API de GitHub con event_type "actualizar".
+  repository_dispatch:
+    types: [actualizar]
+
+  # 2) Cron nativo de GitHub (respaldo, puede ser errático).
+  #    Chile UTC-4: 11:00–20:00 Chile = 15:00–00:00 UTC.
   schedule:
     - cron: "0 15-23 * * *"
     - cron: "0 0 * * *"
+
+  # 3) Botón manual.
   workflow_dispatch:
 
 jobs:
