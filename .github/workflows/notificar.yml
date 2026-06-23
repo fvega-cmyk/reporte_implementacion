@@ -1,11 +1,11 @@
 name: Notificar Interno (diario)
 
 on:
-  # Lunes a viernes a las 16:30 Chile (UTC-4 → 20:30 UTC).
-  # El "1-5" significa lunes(1) a viernes(5). No corre sábados ni domingos.
-  # (Si Chile cambia a UTC-3 en verano, usar "30 19 * * 1-5".)
-  schedule:
-    - cron: "30 20 * * 1-5"
+  # Disparo ÚNICO desde cron-job.org (puntual). Sin cron nativo para evitar
+  # correos duplicados. cron-job.org debe configurarse L-V 16:30 Chile.
+  repository_dispatch:
+    types: [notificar_interno]
+  # Botón manual (por si querés forzar un envío).
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
           cache: pip
       - name: Instalar dependencias
         run: pip install -r requirements.txt
-      - name: Descargar de Drive + enviar correo interno
+      - name: Regenerar fresco + enviar correo interno
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           DRIVE_CARPETA_REPORTES_ID: ${{ secrets.DRIVE_CARPETA_REPORTES_ID }}
