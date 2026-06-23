@@ -1,12 +1,11 @@
 name: Notificar Externo (lunes)
 
 on:
-  # Lunes a las 15:00 Chile (UTC-3 invierno → 18:00 UTC). 1 = lunes.
-  # El actualizador de las 15:00 ya dejó los archivos frescos, así que
-  # este notificador solo los descarga y envía (rápido).
-  # Si Chile pasa a UTC-4 (verano), ajustar a "0 19 * * 1".
-  schedule:
-    - cron: "0 18 * * 1"
+  # Disparo ÚNICO desde cron-job.org (puntual). Sin cron nativo para evitar
+  # correos duplicados. cron-job.org debe configurarse los lunes 15:00 Chile.
+  repository_dispatch:
+    types: [notificar_externo]
+  # Botón manual.
   workflow_dispatch:
 
 jobs:
@@ -23,7 +22,7 @@ jobs:
           cache: pip
       - name: Instalar dependencias
         run: pip install -r requirements.txt
-      - name: Descargar de Drive + enviar correo EXTERNO (clientes)
+      - name: Regenerar fresco + enviar correo EXTERNO (clientes)
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           DRIVE_CARPETA_REPORTES_ID: ${{ secrets.DRIVE_CARPETA_REPORTES_ID }}
