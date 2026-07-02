@@ -38,7 +38,7 @@ CORREOS_POR_CLIENTE = {
     "Ariztía":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "NotCo":               ["msaavedra@sell-out.cl"],
     "Cleaner":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Kimberly Clark":      ["msaavedra@sell-out.cl"],
+    "Kimberly Clark":      ["msaavedra@sell-out.cl", "sophia.plaza@kcc.com"],
     "BIC":                 ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
     "Agricovial":          ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
     "Krispy Kreme":        ["msaavedra@sell-out.cl"],
