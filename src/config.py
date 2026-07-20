@@ -80,7 +80,7 @@ CARPETA_PADRE = "Control Interno"
 CARPETA_FOTOS_RAIZ = "Fotos Implementación"
 
 # IDs de templates (Google Slides + Google Sheets en Drive)
-TEMPLATE_PPT_ID = "1DhZFRZpknziQqdwJdtw5OVjWoV5O3u5yr5rVQjGmU3I"  # genérico "Sell Out" (fallback)
+TEMPLATE_PPT_ID = "14b8cFRMHODnJYq0SX4JgIQssSJzg02g1dPSyZiSqktI"  # genérico "Sell Out" (fallback)
 TEMPLATE_EXCEL_ID = "1ULHh7FbNyMrue32wFjZs4RFqK9Ab-ZICnt_yxm_-6og"
 
 # Carpeta de Drive donde viven los templates por cliente.
