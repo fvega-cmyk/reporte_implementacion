@@ -26,32 +26,7 @@ CORREOS_FIJOS = [
 # Correos que se SUMAN según el CLIENTE de la campaña.
 # El nombre del cliente debe coincidir con la columna CLIENTE de la planilla.
 CORREOS_POR_CLIENTE = {
-    "Mondelez":            ["msaavedra@sell-out.cl"],
-    "Softys":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Unilever":            ["dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "Andina":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Sofruco":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Wild Food":           ["msaavedra@sell-out.cl"],
-    "Softys Professional": ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Kraft":               ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Agrosuper":           ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "lvaliente@sell-out.cl"],
-    "Ariztía":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "NotCo":               ["msaavedra@sell-out.cl"],
-    "Cleaner":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Kimberly Clark":      ["msaavedra@sell-out.cl", "sophia.plaza@kcc.com"],
-    "BIC":                 ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Agricovial":          ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Krispy Kreme":        ["msaavedra@sell-out.cl"],
-    "CCU":                 ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "CCU Nestlé":          ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "CCU Pepsico":         ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "CCU Carozzi":         ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "Gourmet":             ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "Eucerin":             ["cchamorro@motionx.cl"],
-    # Clientes pendientes de configurar: NO se agregan destinatarios (solo van los fijos)
-    "Prosud":              [],
-    "Natura":              [],
-    "Crocs":               [],
+    "Kimberly Clark":      ["msaavedra@sell-out.cl", "sophia.plaza@kcc.com"]
 }
 
 # Correos placeholder que deben ignorarse si aparecieran en alguna lista.
