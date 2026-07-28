@@ -45,8 +45,8 @@ CORREOS_POR_CLIENTE = {
     "CCU":                 ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "CCU Nestlé":          ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "CCU Pepsico":         ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
-    "CCU Carozzi":         ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl"],
-    "Gourmet":             ["scanga@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl"],
+    "CCU Carozzi":         ["pmunoz@sell-out.cl", "mvargas@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
+    "Gourmet":             ["scanga@sell-out.cl", "gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "Eucerin":             ["cchamorro@motionx.cl"],
     # Clientes pendientes de configurar: NO se agregan destinatarios (solo van los fijos)
     "Prosud":              [],
