@@ -4,12 +4,31 @@ Equivalentes a fmt(), san(), fotoUrl(), buscarFoto() de Apps Script.
 """
 import re
 import unicodedata
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from urllib.parse import quote
 from io import BytesIO
 
 from googleapiclient.http import MediaIoBaseDownload
 from config import FOTO_URL_BASE
+
+
+def ventana_semanal(hoy=None):
+    """
+    Ventana del reporte EXTERNO: martes de la semana anterior → lunes actual.
+
+    Se ancla siempre en el LUNES (no en 'hoy'), para que el período sea el mismo
+    aunque el workflow se dispare manualmente un miércoles.
+
+    - Si hoy es lunes      → (martes semana pasada, hoy)
+    - Si hoy es miércoles  → (martes semana pasada, lunes de esta semana)
+
+    weekday(): lunes=0, martes=1, ..., domingo=6.
+    """
+    if hoy is None:
+        hoy = date.today()
+    lunes = hoy - timedelta(days=hoy.weekday())   # lunes de la semana en curso
+    martes_anterior = lunes - timedelta(days=6)   # martes de la semana anterior
+    return martes_anterior, lunes
 
 
 def fmt(v):
