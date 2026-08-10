@@ -75,6 +75,21 @@ CORREOS_POR_CLIENTE_EXTERNO = {
     ],
 }
 
+# ============================================================
+# CAMPAÑAS CANCELADAS
+# ============================================================
+# Valores de la columna PROCESO que se consideran "cancelado".
+# Se comparan normalizados (sin tildes, en minúsculas).
+# Si el 100% de las filas de una campaña tiene uno de estos valores,
+# la campaña NO se notifica (ni interno ni externo).
+PROCESOS_CANCELADO = {"cancelado", "cancelada", "anulado", "anulada"}
+
+# Si True: las filas con PROCESO vacío se ignoran al calcular el 100%
+#   (una campaña con 8 canceladas + 2 vacías se considera cancelada).
+# Si False (recomendado y por defecto): una sola fila con PROCESO vacío
+#   alcanza para que la campaña SÍ se notifique.
+CANCELADAS_IGNORAR_VACIOS = False
+
 CARPETA_REPORTES = "Reportes Diarios"
 CARPETA_PADRE = "Control Interno"
 CARPETA_FOTOS_RAIZ = "Fotos Implementación"
