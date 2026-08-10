@@ -3,8 +3,9 @@ Envía el correo informativo en formato HTML. Dos tipos:
 
   - "interno": diario. Va a correos fijos + correos del cliente (todos en To).
                Lleva la firma de correo automático interno.
-  - "externo": solo lunes. Va al fijo externo (To) + clientes en copia visible (CC).
-               Sin firma interna. Solo se envía para clientes con config externa.
+  - "externo": semanal (lunes). Va al fijo externo (To) + clientes en copia
+               visible (CC). Sin firma interna. Solo para clientes con config
+               externa. Informa el período martes anterior → lunes actual.
 
 Los archivos YA fueron subidos/actualizados en Drive por subir_a_drive.py.
 - Si el peso total (Excel + PPT) es < UMBRAL → adjunta ambos.
@@ -49,7 +50,7 @@ def _dedupe(correos):
     return final
 
 
-def _construir_html(campana, fecha_str, links, mostrar_firma=True):
+def _construir_html(campana, fecha_str, links, mostrar_firma=True, periodo_str=None):
     """Arma el cuerpo HTML del correo."""
     firma = ""
     if mostrar_firma:
@@ -58,6 +59,20 @@ def _construir_html(campana, fecha_str, links, mostrar_firma=True):
       <p style="margin:0;font-size:12px;color:{GRIS_SUAVE};">
         Este es un correo automático del Sistema de Reportes de Sell Out.
       </p>"""
+
+    if periodo_str:
+        titulo_bloque = "Reporte Semanal de Implementación"
+        parrafo_intro = (
+            f"Adjunto reportes de implementación de la campaña "
+            f"<strong>{campana}</strong> correspondientes al período "
+            f"<strong>{periodo_str}</strong>."
+        )
+    else:
+        titulo_bloque = "Reporte Diario de Implementación"
+        parrafo_intro = (
+            f"Adjunto reportes de implementación de la campaña "
+            f"<strong>{campana}</strong> actualizado al <strong>{fecha_str}</strong>."
+        )
 
     return f"""\
 <!DOCTYPE html>
@@ -71,7 +86,7 @@ def _construir_html(campana, fecha_str, links, mostrar_firma=True):
     <div style="background-color:{AZUL};border-radius:10px 10px 0 0;padding:22px 28px;">
       <div style="color:#ffffff;font-size:13px;letter-spacing:1px;
                   text-transform:uppercase;opacity:0.85;">
-        Reporte Diario de Implementación
+        {titulo_bloque}
       </div>
       <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:4px;">
         {campana}
@@ -84,8 +99,7 @@ def _construir_html(campana, fecha_str, links, mostrar_firma=True):
       <p style="margin:0 0 14px;">Estimado equipo,</p>
 
       <p style="margin:0 0 18px;">
-        Adjunto reportes de implementación de la campaña
-        <strong>{campana}</strong> actualizado al <strong>{fecha_str}</strong>.
+        {parrafo_intro}
       </p>
 
       <p style="margin:0 0 8px;font-weight:600;color:{AZUL};">Se incluyen:</p>
@@ -127,11 +141,16 @@ def _construir_html(campana, fecha_str, links, mostrar_firma=True):
 </html>"""
 
 
-def _texto_plano(campana, fecha_str, links):
+def _texto_plano(campana, fecha_str, links, periodo_str=None):
+    if periodo_str:
+        intro = (f"Adjunto reportes de implementación de la campaña {campana} "
+                 f"correspondientes al período {periodo_str}.")
+    else:
+        intro = (f"Adjunto reportes de implementación de la campaña {campana} "
+                 f"actualizado al {fecha_str}.")
     return (
         f"Estimado equipo,\n\n"
-        f"Adjunto reportes de implementación de la campaña {campana} "
-        f"actualizado al {fecha_str}.\n\n"
+        f"{intro}\n\n"
         f"Se incluyen:\n"
         f"1. Excel con resumen y detalle.\n"
         f"2. PPT con fotos.\n\n"
@@ -143,12 +162,19 @@ def _texto_plano(campana, fecha_str, links):
     )
 
 
-def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None, tipo="interno"):
+def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
+                 tipo="interno", periodo=None):
     """
-    tipo: "interno" (diario) o "externo" (lunes, a clientes en CC).
+    tipo:    "interno" (diario) o "externo" (semanal, a clientes en CC).
+    periodo: None o tupla (date_desde, date_hasta). Si viene, el correo habla
+             de un PERÍODO (reporte semanal) en vez de una fecha puntual.
     Devuelve True si se envió, False si se omitió.
     """
     fecha_str = hoy.strftime("%d/%m/%Y")
+    periodo_str = None
+    if periodo:
+        d, h = periodo
+        periodo_str = f"{d.strftime('%d/%m/%Y')} al {h.strftime('%d/%m/%Y')}"
     fecha_archivo = hoy.strftime("%Y%m%d")
     cliente_limpio = (cliente or "").strip()
 
@@ -184,14 +210,20 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None, tipo
     adjuntar_todo = peso_total < UMBRAL_BYTES
 
     msg = EmailMessage()
-    msg["Subject"] = f"{ASUNTO_EMAIL} {campana} | {fecha_str}"
+    if periodo_str:
+        msg["Subject"] = f"Reporte Semanal Implementacion - {campana} | {periodo_str}"
+    else:
+        msg["Subject"] = f"{ASUNTO_EMAIL} {campana} | {fecha_str}"
     msg["From"] = f"Reporte Implementación <{gmail_user}>"
     msg["To"] = ", ".join(to)
     if cc:
         msg["Cc"] = ", ".join(cc)
 
-    msg.set_content(_texto_plano(campana, fecha_str, links))
-    msg.add_alternative(_construir_html(campana, fecha_str, links, mostrar_firma), subtype="html")
+    msg.set_content(_texto_plano(campana, fecha_str, links, periodo_str))
+    msg.add_alternative(
+        _construir_html(campana, fecha_str, links, mostrar_firma, periodo_str),
+        subtype="html",
+    )
 
     if adjuntar_todo:
         print(f"        Peso total: {peso_mb:.1f} MB → ADJUNTA ambos")
