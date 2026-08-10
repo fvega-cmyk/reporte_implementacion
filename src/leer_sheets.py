@@ -147,14 +147,58 @@ def excluir_campanas_canceladas(grupos):
 
 
 # ============================================================
+# FILTROS MANUALES (reenvíos): por cliente y por campaña
+# ============================================================
+def cliente_de(filas):
+    """Cliente de una campaña (se toma de la primera fila, como en todo el código)."""
+    return str(filas[0][IDX["CLIENTE"]] or "SIN CLIENTE").strip()
+
+
+def clientes_disponibles(grupos):
+    """Lista ordenada de clientes presentes en los grupos (para mensajes de error)."""
+    return sorted({cliente_de(filas) for filas in grupos.values()})
+
+
+def filtrar_por_cliente(grupos, cliente):
+    """
+    Deja solo las campañas del cliente indicado.
+    La comparación es exacta pero SIN tildes ni mayúsculas, así que da lo mismo
+    escribir "Ariztía", "ariztia" o "ARIZTIA".
+
+    OJO: es exacta a propósito. "CCU" NO arrastra "CCU Nestlé", y "Softys" NO
+    arrastra "Softys Professional": son clientes distintos con destinatarios
+    distintos.
+    """
+    if not cliente:
+        return grupos
+    objetivo = normalizar(cliente)
+    return {
+        campana: filas
+        for campana, filas in grupos.items()
+        if normalizar(cliente_de(filas)) == objetivo
+    }
+
+
+def filtrar_por_campana(grupos, campana):
+    """Deja solo la campaña indicada (sin tildes ni mayúsculas)."""
+    if not campana:
+        return grupos
+    objetivo = normalizar(campana)
+    return {c: f for c, f in grupos.items() if normalizar(c) == objetivo}
+
+
+# ============================================================
 # ENTRADA PRINCIPAL
 # ============================================================
-def cargar_datos(desde=None, hasta=None, excluir_canceladas=False):
+def cargar_datos(desde=None, hasta=None, excluir_canceladas=False,
+                 cliente=None, campana=None):
     """
     Lee, filtra y agrupa. Retorna (headers, grupos).
 
     - Un día:  cargar_datos(hoy)
     - Rango:   cargar_datos(martes, lunes)
+
+    `cliente` y `campana` son filtros opcionales para reenvíos manuales.
     """
     if desde is None:
         desde = date.today()
@@ -175,6 +219,26 @@ def cargar_datos(desde=None, hasta=None, excluir_canceladas=False):
     grupos = agrupar_por_campana(activas)
     print(f"Campañas encontradas ({len(grupos)}): "
           f"{', '.join(grupos.keys()) if grupos else '(ninguna)'}")
+
+    # --- Filtros manuales (reenvíos) ---
+    if cliente and grupos:
+        disponibles = clientes_disponibles(grupos)
+        grupos = filtrar_por_cliente(grupos, cliente)
+        if not grupos:
+            print(f"[AVISO] Ninguna campaña del cliente '{cliente}' en este período.")
+            print(f"        Clientes con campañas activas: {', '.join(disponibles)}")
+            return headers, {}
+        print(f"Filtro cliente '{cliente}' → {len(grupos)} campaña(s): "
+              f"{', '.join(grupos.keys())}")
+
+    if campana and grupos:
+        posibles = sorted(grupos.keys())
+        grupos = filtrar_por_campana(grupos, campana)
+        if not grupos:
+            print(f"[AVISO] La campaña '{campana}' no está activa en este período.")
+            print(f"        Campañas disponibles: {', '.join(posibles)}")
+            return headers, {}
+        print(f"Filtro campaña '{campana}' → {', '.join(grupos.keys())}")
 
     if excluir_canceladas and grupos:
         grupos, excluidas = excluir_campanas_canceladas(grupos)
