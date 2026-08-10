@@ -50,6 +50,20 @@ def _dedupe(correos):
     return final
 
 
+def _parsear_destinatarios(valor):
+    """
+    Acepta None, lista, o string "a@x.cl, b@y.cl; c@z.cl".
+    Devuelve lista limpia y deduplicada (vacía si no hay nada).
+    """
+    if not valor:
+        return []
+    if isinstance(valor, str):
+        crudos = valor.replace(";", ",").split(",")
+    else:
+        crudos = list(valor)
+    return _dedupe([c for c in (x.strip() for x in crudos) if c])
+
+
 def _construir_html(campana, fecha_str, links, mostrar_firma=True, periodo_str=None):
     """Arma el cuerpo HTML del correo."""
     firma = ""
@@ -163,11 +177,21 @@ def _texto_plano(campana, fecha_str, links, periodo_str=None):
 
 
 def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
-                 tipo="interno", periodo=None):
+                 tipo="interno", periodo=None,
+                 solo_cliente=False, destinatarios=None):
     """
     tipo:    "interno" (diario) o "externo" (semanal, a clientes en CC).
     periodo: None o tupla (date_desde, date_hasta). Si viene, el correo habla
              de un PERÍODO (reporte semanal) en vez de una fecha puntual.
+
+    Overrides para REENVÍOS manuales:
+      solo_cliente:  True  → omite CORREOS_FIJOS y manda solo a los correos
+                             configurados para ese cliente. Sirve para no
+                             volver a spamear al equipo interno en un reenvío.
+      destinatarios: lista o string "a@x.cl, b@y.cl" → manda EXACTAMENTE a esos
+                     correos, ignorando toda la configuración. Tiene prioridad
+                     sobre solo_cliente.
+
     Devuelve True si se envió, False si se omitió.
     """
     fecha_str = hoy.strftime("%d/%m/%Y")
@@ -183,20 +207,43 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
     if not gmail_user or not gmail_pass:
         raise RuntimeError("Faltan variables GMAIL_USER / GMAIL_APP_PASS")
 
-    # --- Resolver destinatarios según tipo ---
+    # --- Resolver destinatarios ---
     cc = []
-    if tipo == "externo":
+    override = _parsear_destinatarios(destinatarios)
+
+    if override:
+        # Override total: manda exactamente a estos correos, sin CC.
+        to = override
+        mostrar_firma = (tipo != "externo")
+        print(f"        [OVERRIDE] destinatarios manuales: {', '.join(to)}")
+
+    elif tipo == "externo":
         clientes_ext = _dedupe(CORREOS_POR_CLIENTE_EXTERNO.get(cliente_limpio, []))
         if not clientes_ext:
             print(f"        [EXTERNO] '{cliente_limpio}' sin destinatarios externos → se omite")
             return False
-        to = _dedupe(CORREOS_FIJOS_EXTERNO)
-        cc = clientes_ext
+        if solo_cliente:
+            # Solo el cliente, sin el fijo interno de respaldo.
+            to = clientes_ext
+        else:
+            to = _dedupe(CORREOS_FIJOS_EXTERNO)
+            cc = clientes_ext
         mostrar_firma = False
+
     else:
-        to = _dedupe(list(CORREOS_FIJOS) + CORREOS_POR_CLIENTE.get(cliente_limpio, []))
-        if not to:
-            to = [EMAIL_DESTINATARIO]
+        del_cliente = _dedupe(CORREOS_POR_CLIENTE.get(cliente_limpio, []))
+        if solo_cliente:
+            # Omite los CORREOS_FIJOS: útil en reenvíos, para no volver a
+            # notificar al equipo interno que ya recibió el correo.
+            to = del_cliente
+            if not to:
+                print(f"        [INTERNO] '{cliente_limpio}' no tiene correos propios "
+                      f"configurados y solo_cliente está activo → se omite")
+                return False
+        else:
+            to = _dedupe(list(CORREOS_FIJOS) + del_cliente)
+            if not to:
+                to = [EMAIL_DESTINATARIO]
         mostrar_firma = True
 
     print(f"        [{tipo.upper()}] To: {', '.join(to)}" + (f" | CC: {', '.join(cc)}" if cc else ""))
