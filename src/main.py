@@ -20,9 +20,15 @@ Los tres modos escriben sobre el MISMO archivo de Drive por campaña
 (Reporte_Campana.xlsx / Fotos_Campana.pptx), conservando file ID y link
 permanente. El link siempre refleja la última corrida.
 
-Flags extra:
-  --desde YYYY-MM-DD  --hasta YYYY-MM-DD   → fuerza la ventana (pruebas).
-  --incluir-canceladas                     → no omite las 100% canceladas.
+Flags extra (pensados para REENVÍOS manuales desde GitHub Actions):
+  --cliente "Softys"          → procesa solo las campañas de ese cliente.
+  --campana "Verano 2026"     → procesa solo esa campaña.
+  --solo-cliente              → omite los CORREOS_FIJOS internos; manda solo a
+                                los correos configurados para el cliente.
+  --destinatarios "a@x,b@y"   → manda EXACTAMENTE a esos correos, ignorando
+                                toda la configuración de config.py.
+  --desde YYYY-MM-DD --hasta YYYY-MM-DD  → fuerza la ventana de fechas.
+  --incluir-canceladas        → no omite las campañas 100% canceladas.
 """
 import sys
 import time
@@ -51,6 +57,17 @@ def _arg_fecha(flag):
         raise SystemExit(f"Valor inválido en {flag}: use YYYY-MM-DD")
 
 
+def _arg_texto(flag):
+    """Lee un flag tipo --cliente "Softys" desde sys.argv. Devuelve str o None."""
+    if flag not in sys.argv:
+        return None
+    i = sys.argv.index(flag)
+    if i + 1 >= len(sys.argv):
+        raise SystemExit(f"Falta el valor de {flag}")
+    valor = sys.argv[i + 1].strip()
+    return valor or None
+
+
 def _generar_y_subir(campana, filas, headers, fecha_ref):
     """Genera Excel + PPT y los sube a Drive. Devuelve (excel_bytes, ppt_bytes, links)."""
     print("  [1/3] Generando Excel...")
@@ -73,6 +90,12 @@ def main():
     enviar_externo = "--enviar-externo" in sys.argv
     es_notificador = enviar or enviar_externo
     excluir_canceladas = es_notificador and "--incluir-canceladas" not in sys.argv
+
+    # Filtros y overrides de reenvío manual
+    filtro_cliente = _arg_texto("--cliente")
+    filtro_campana = _arg_texto("--campana")
+    solo_cliente = "--solo-cliente" in sys.argv
+    destinatarios = _arg_texto("--destinatarios")
 
     hoy = date.today()
 
@@ -104,8 +127,21 @@ def main():
               f"{hasta.strftime('%d/%m/%Y')} ===")
     if es_notificador and not excluir_canceladas:
         print("=== ATENCIÓN: --incluir-canceladas activo, NO se omiten las 100% canceladas ===")
+    if filtro_cliente:
+        print(f"=== Filtro de cliente: {filtro_cliente} ===")
+    if filtro_campana:
+        print(f"=== Filtro de campaña: {filtro_campana} ===")
+    if solo_cliente:
+        print("=== Envío SOLO a los correos del cliente (sin los fijos internos) ===")
+    if destinatarios:
+        print(f"=== Destinatarios forzados: {destinatarios} ===")
 
-    headers, grupos = cargar_datos(desde, hasta, excluir_canceladas=excluir_canceladas)
+    headers, grupos = cargar_datos(
+        desde, hasta,
+        excluir_canceladas=excluir_canceladas,
+        cliente=filtro_cliente,
+        campana=filtro_campana,
+    )
     if not grupos:
         print("Sin campañas para procesar. Fin.")
         return 0
@@ -136,7 +172,8 @@ def main():
 
             print("  [2/2] Enviando correo...")
             enviar_email(campana, fecha_ref, excel_bytes, ppt_bytes, links,
-                         cliente=cliente, tipo=tipo_correo, periodo=periodo)
+                         cliente=cliente, tipo=tipo_correo, periodo=periodo,
+                         solo_cliente=solo_cliente, destinatarios=destinatarios)
             print(f"  [OK] {campana} notificado en {time.time()-t0:.1f}s")
 
         except Exception as e:
