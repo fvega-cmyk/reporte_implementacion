@@ -1,0 +1,152 @@
+name: Reenviar Reportes (manual)
+
+# Workflow SOLO manual, para cuando un cliente pide que le reenvíes el reporte.
+# No tiene cron ni repository_dispatch: nunca se dispara solo.
+#
+# Uso: pestaña Actions → "Reenviar Reportes (manual)" → "Run workflow" →
+#      elegís el cliente en el desplegable → Run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cliente:
+        description: "Cliente"
+        type: choice
+        required: true
+        default: "Softys"
+        options:
+          - "Softys"
+          - "Mondelez"
+          - "Kimberly Clark"
+          - "Eucerin"
+          - "Unilever"
+          - "Agrosuper"
+          - "CCU"
+          - "Ariztía"
+          - "OTRO (escribir abajo)"
+          - "TODOS"
+
+      cliente_otro:
+        description: "Si elegiste OTRO: nombre exacto del cliente como aparece en la planilla"
+        required: false
+        default: ""
+
+      tipo:
+        description: "Tipo de correo"
+        type: choice
+        required: true
+        default: "interno"
+        options:
+          - "interno"
+          - "externo"
+
+      solo_cliente:
+        description: "Enviar SOLO a los correos del cliente (omitir los 4 fijos internos)"
+        type: boolean
+        required: false
+        default: true
+
+      campana:
+        description: "(Opcional) Solo esta campaña. Vacío = todas las del cliente"
+        required: false
+        default: ""
+
+      destinatarios:
+        description: "(Opcional) Correos exactos separados por coma. Ignora toda la config"
+        required: false
+        default: ""
+
+      desde:
+        description: "(Opcional) Inicio del período YYYY-MM-DD"
+        required: false
+        default: ""
+
+      hasta:
+        description: "(Opcional) Fin del período YYYY-MM-DD"
+        required: false
+        default: ""
+
+jobs:
+  reenviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Reenviar reportes
+        shell: bash
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          DRIVE_CARPETA_REPORTES_ID: ${{ secrets.DRIVE_CARPETA_REPORTES_ID }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          IN_CLIENTE: ${{ inputs.cliente }}
+          IN_CLIENTE_OTRO: ${{ inputs.cliente_otro }}
+          IN_TIPO: ${{ inputs.tipo }}
+          IN_SOLO_CLIENTE: ${{ inputs.solo_cliente }}
+          IN_CAMPANA: ${{ inputs.campana }}
+          IN_DESTINATARIOS: ${{ inputs.destinatarios }}
+          IN_DESDE: ${{ inputs.desde }}
+          IN_HASTA: ${{ inputs.hasta }}
+        run: |
+          set -euo pipefail
+
+          # Se usa un array de bash para que los nombres con espacios
+          # ("Kimberly Clark") lleguen enteros como un solo argumento.
+          ARGS=()
+
+          if [ "$IN_TIPO" = "externo" ]; then
+            ARGS+=(--enviar-externo)
+          else
+            ARGS+=(--enviar)
+          fi
+
+          # Resolver el cliente: el desplegable, o el texto libre si eligió OTRO
+          CLI="$IN_CLIENTE"
+          case "$IN_CLIENTE" in
+            "OTRO (escribir abajo)")
+              if [ -z "$IN_CLIENTE_OTRO" ]; then
+                echo "::error::Elegiste OTRO pero dejaste 'cliente_otro' vacío."
+                exit 1
+              fi
+              CLI="$IN_CLIENTE_OTRO"
+              ;;
+            "TODOS")
+              CLI=""
+              ;;
+          esac
+
+          if [ -n "$CLI" ]; then
+            ARGS+=(--cliente "$CLI")
+          else
+            echo "::warning::Sin filtro de cliente: se reenvía a TODOS los clientes con campañas activas."
+          fi
+
+          if [ -n "$IN_CAMPANA" ]; then
+            ARGS+=(--campana "$IN_CAMPANA")
+          fi
+          if [ -n "$IN_DESTINATARIOS" ]; then
+            ARGS+=(--destinatarios "$IN_DESTINATARIOS")
+          fi
+          if [ -n "$IN_DESDE" ]; then
+            ARGS+=(--desde "$IN_DESDE")
+          fi
+          if [ -n "$IN_HASTA" ]; then
+            ARGS+=(--hasta "$IN_HASTA")
+          fi
+          if [ "$IN_SOLO_CLIENTE" = "true" ]; then
+            ARGS+=(--solo-cliente)
+          fi
+
+          echo "Ejecutando: python src/main.py ${ARGS[*]}"
+          python src/main.py "${ARGS[@]}"
