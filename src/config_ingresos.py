@@ -106,6 +106,27 @@ SUMAR_CANTIDADES_REPETIDAS = False
 # toman las primeras N.
 MAX_FOTOS_INGRESOS = 2
 
+# --- Dónde viven las fotos de las activaciones ---
+# Ruta real: Mi unidad / Control Interno / <valor de la columna FOTO 1 o FOTO 2>
+# La columna completa el resto de la ruta (subcarpeta + nombre de archivo).
+#
+# IMPORTANTE: compartí esta carpeta con la cuenta de servicio (permiso Lector).
+NOMBRE_CARPETA_FOTOS_INGRESOS = "Control Interno"
+
+# Recomendado: pegá acá el ID de la carpeta para saltear la búsqueda por
+# nombre. Se saca de la URL al abrir la carpeta en Drive:
+#   drive.google.com/drive/folders/ESTE_ES_EL_ID
+# Es lo más seguro si existe más de una carpeta llamada "Control Interno".
+CARPETA_FOTOS_INGRESOS_ID = "1afTrbQ-K8BlzJCY0NJxBGcP_eLyOXPU4"
+
+# Si no encuentra la foto en su ruta, ¿buscarla por nombre en TODO el Drive?
+#   False (default) → no. Mejor que falte una foto a que aparezca la de otra
+#                     campaña: un nombre repetido en la carpeta de
+#                     implementaciones traería la foto equivocada y nadie lo
+#                     notaría en el PPT que ve el cliente.
+#   True            → sí, como último recurso. Queda avisado en el log.
+FALLBACK_BUSQUEDA_GLOBAL = False
+
 # ============================================================
 # CANCELADAS
 # ============================================================
