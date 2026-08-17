@@ -74,16 +74,37 @@ CORREOS_INGRESOS = [
 CORREOS_INGRESOS_CC = []
 
 # ============================================================
+# UNA SLIDE POR LOCAL (no por material)
+# ============================================================
+# En Implementación cada fila (sala + material) genera su propia slide.
+# En Activación/Ingreso NO: las fotos del local se repiten fila por fila, así
+# que se agrupa por LOCAL y cada local es UNA slide, con el listado de sus
+# materiales adentro.
+#
+# La agrupación se hace por ID_LOCAL. Si una fila viene sin ID_LOCAL, se cae
+# a "COD|NOMBRE_SALA" para no perderla ni mezclarla con otro local.
+AGRUPAR_POR = "ID_LOCAL"
+
+# Formato de cada línea del listado de materiales, cuando el template no trae
+# una línea propia con los tokens. Si el template SÍ trae una línea tipo
+# "[MATERIAL] ([CANTIDAD]) : [PROCESO]", se respeta esa (con su formato,
+# viñetas, tamaño, etc.) y este valor se ignora.
+FORMATO_LINEA_MATERIAL = "[MATERIAL] ([CANTIDAD]) : [PROCESO]"
+
+# Si dos filas del mismo local traen el MISMO material, cantidad y proceso,
+# se colapsan en una sola línea (duplicado de carga).
+#   False (default) → "Exhibidor (1) : Realizado" queda una vez, sin sumar.
+#   True            → suma las cantidades: "Exhibidor (2) : Realizado".
+# Ojo: sumar es riesgoso si en realidad son dos registros legítimos distintos.
+SUMAR_CANTIDADES_REPETIDAS = False
+
+# ============================================================
 # FOTOS
 # ============================================================
-# Cantidad máxima de fotos por slide (el template define cuántos placeholders
-# [FOTO n] hay; esto es el techo).
-MAX_FOTOS_INGRESOS = 4
-
-# Si para algún PROCESO querés recortar la cantidad de fotos, como se hace en
-# Implementación (Realizado→3, Rechazado→1), definilo acá. Vacío = todas.
-#   Ej: {"rechazado": 1}
-FOTOS_POR_PROCESO_INGRESOS = {}
+# Fotos por local. Las fotos vienen repetidas en todas las filas del local,
+# así que se juntan todas, se quitan duplicados (por nombre de archivo) y se
+# toman las primeras N.
+MAX_FOTOS_INGRESOS = 2
 
 # ============================================================
 # CANCELADAS
