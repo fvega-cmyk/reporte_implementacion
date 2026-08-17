@@ -19,6 +19,10 @@ Flags:
   --campana "Verano 2026"      → solo esa campaña.
   --destinatarios "a@x,b@y"    → manda exactamente a esos correos.
   --incluir-canceladas         → no omite las campañas 100% canceladas.
+  --probar-fotos               → NO genera nada: solo resuelve las rutas de las
+                                 fotos de la semana y dice cuáles encuentra y
+                                 dónde. Sirve para verificar la carpeta base
+                                 antes de una corrida real.
 """
 import sys
 import time
@@ -30,6 +34,8 @@ from leer_sheets_ingresos import cargar_ingresos
 from generar_ppt_ingresos import generar_ppt_ingresos
 from subir_a_drive_ingresos import preparar_carpeta_semana, subir_ppt_semana
 from enviar_correo_ingresos import enviar_email_ingresos
+from generar_ppt_ingresos import agrupar_por_local, fotos_del_local
+from fotos_ingresos import resolver_id_foto, resumen_fotos
 from config import IDX
 from config_ingresos import EXCLUIR_CANCELADAS_INGRESOS
 
@@ -51,6 +57,56 @@ def _arg_entero(flag):
         return int(valor)
     except ValueError:
         raise SystemExit(f"{flag} debe ser un número entero")
+
+
+def _probar_fotos(grupos):
+    """
+    Resuelve las rutas de las fotos sin generar ni subir nada.
+    Imprime dónde encontró cada una (o por qué no) y devuelve 1 si falta
+    alguna, para que el workflow quede en rojo y se note.
+    """
+    from google_clients import get_drive
+    drive = get_drive()
+
+    print("\n=== DIAGNÓSTICO DE FOTOS (no se genera ni se sube nada) ===")
+    total, fallan, sin_fotos = 0, 0, 0
+
+    for campana, filas in grupos.items():
+        print(f"\n--- {campana} ---")
+        for _clave, filas_local in agrupar_por_local(filas).items():
+            base = filas_local[0]
+            cod = str(base[IDX["COD"]] or "")
+            sala = str(base[IDX["NOMBRE_SALA"]] or "")
+            rutas = fotos_del_local(filas_local)
+
+            if not rutas:
+                sin_fotos += 1
+                print(f"  [--] {cod} {sala}: sin fotos cargadas en la planilla")
+                continue
+
+            for ruta in rutas:
+                total += 1
+                try:
+                    file_id, detalle = resolver_id_foto(drive, ruta)
+                except Exception as e:
+                    file_id, detalle = None, str(e)
+                if file_id:
+                    print(f"  [OK] {cod} {sala}: {ruta}")
+                    print(f"       -> {detalle}")
+                else:
+                    fallan += 1
+                    print(f"  [NO] {cod} {sala}: {ruta}")
+                    print(f"       -> {detalle}")
+
+    print(f"\n=== {total - fallan}/{total} fotos resueltas ===")
+    if sin_fotos:
+        print(f"({sin_fotos} local/es sin ninguna foto cargada en la planilla)")
+    if fallan:
+        print("Revisá que la carpeta base sea la correcta "
+              "(CARPETA_FOTOS_INGRESOS_ID en config_ingresos.py) y que esté "
+              "compartida con la cuenta de servicio.")
+        return 1
+    return 0
 
 
 def main():
@@ -93,6 +149,10 @@ def main():
     if not grupos:
         print("Sin ingresos para procesar esta semana. Fin.")
         return 0
+
+    # --- Modo diagnóstico: solo resolver rutas de fotos ---
+    if "--probar-fotos" in sys.argv:
+        return _probar_fotos(grupos)
 
     # La carpeta de la semana se crea UNA vez y la comparten todas las campañas
     carpeta_id, drive_id, link_carpeta = preparar_carpeta_semana(etiqueta)
@@ -144,7 +204,8 @@ def main():
     elif enviar:
         print("\nNo se generó ningún PPT: no se envía correo.")
 
-    print(f"\n=== Fin. {len(reportes)} PPT en {etiqueta}. "
+    print("\n" + resumen_fotos())
+    print(f"=== Fin. {len(reportes)} PPT en {etiqueta}. "
           f"Tiempo total: {time.time()-inicio:.1f}s ===")
     if errores:
         print(f"Errores ({len(errores)}):")
