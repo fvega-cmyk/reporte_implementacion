@@ -13,6 +13,9 @@ agrupa por LOCAL y cada local es UNA slide:
       │     una línea por material del local
       └── 2 fotos, quitando duplicados entre todas las filas del local
 
+Las fotos se resuelven POR RUTA (Control Interno / valor de la columna), no
+por nombre de archivo. Ver fotos_ingresos.py.
+
 La agrupación es por ID_LOCAL (config_ingresos.AGRUPAR_POR).
 
 Estructura esperada del template "Template_Reporte_Ingresos":
@@ -66,7 +69,8 @@ from config_ingresos import (
     FORMATO_LINEA_MATERIAL,
     SUMAR_CANTIDADES_REPETIDAS,
 )
-from utils import fmt, buscar_foto_blob, parse_fecha
+from utils import fmt, parse_fecha
+from fotos_ingresos import buscar_foto_ingreso
 from google_clients import get_drive
 
 # Helpers reutilizados del flujo de Implementación (no se duplica lógica)
@@ -538,10 +542,9 @@ def _insertar_fotos(slide, drive, rutas):
         if i >= len(posiciones):
             break
         area_left, area_top, area_w, area_h = posiciones[i]
-        blob = buscar_foto_blob(drive, ruta)
+        blob = buscar_foto_ingreso(drive, ruta)
         if blob is None:
-            print(f"      [WARN] Foto {i+1} no encontrada: {ruta}")
-            continue
+            continue   # el motivo exacto ya lo imprimió buscar_foto_ingreso()
         try:
             norm = _normalizar_imagen(blob)
             if norm is None:
