@@ -117,7 +117,7 @@ NOMBRE_CARPETA_FOTOS_INGRESOS = "Control Interno"
 # nombre. Se saca de la URL al abrir la carpeta en Drive:
 #   drive.google.com/drive/folders/ESTE_ES_EL_ID
 # Es lo más seguro si existe más de una carpeta llamada "Control Interno".
-CARPETA_FOTOS_INGRESOS_ID = "1afTrbQ-K8BlzJCY0NJxBGcP_eLyOXPU4"
+CARPETA_FOTOS_INGRESOS_ID = ""
 
 # Si no encuentra la foto en su ruta, ¿buscarla por nombre en TODO el Drive?
 #   False (default) → no. Mejor que falte una foto a que aparezca la de otra
