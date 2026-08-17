@@ -28,6 +28,7 @@ from io import BytesIO
 
 from googleapiclient.http import MediaIoBaseDownload
 
+from utils import normalizar
 from config_ingresos import (
     NOMBRE_CARPETA_FOTOS_INGRESOS,
     CARPETA_FOTOS_INGRESOS_ID,
@@ -61,10 +62,12 @@ def _listar(drive, q):
 
 def carpeta_raiz_fotos(drive):
     """
-    ID de la carpeta base de las fotos ("Control Interno" en Mi unidad).
+    Carpeta base de las fotos. Devuelve (id, nombre_real).
 
-    Se puede fijar por config o por variable de entorno para evitar la búsqueda
-    por nombre, que es lo recomendable si hay más de una carpeta con ese nombre.
+    El NOMBRE real importa: si se fija el ID de "Fotos Activación" pero la
+    columna de la planilla ya trae "Fotos Activación/..." adelante, hay que
+    detectar esa repetición y saltearla. Por eso no alcanza con el nombre del
+    config: se usa el que devuelve Drive.
     """
     global _cache_raiz
     if _cache_raiz:
@@ -77,7 +80,7 @@ def carpeta_raiz_fotos(drive):
             fileId=id_fijo, fields="id, name", supportsAllDrives=True
         ).execute()
         print(f"  [FOTOS] Carpeta base (ID fijo): '{info['name']}' ({info['id']})")
-        _cache_raiz = info["id"]
+        _cache_raiz = (info["id"], info["name"])
         return _cache_raiz
 
     carpetas = _listar(
@@ -98,8 +101,8 @@ def carpeta_raiz_fotos(drive):
               f"Para fijar la correcta, pegá el ID en CARPETA_FOTOS_INGRESOS_ID. "
               f"Candidatas: {ids}")
 
-    _cache_raiz = carpetas[0]["id"]
-    print(f"  [FOTOS] Carpeta base: '{NOMBRE_CARPETA_FOTOS_INGRESOS}' ({_cache_raiz})")
+    _cache_raiz = (carpetas[0]["id"], carpetas[0]["name"])
+    print(f"  [FOTOS] Carpeta base: '{_cache_raiz[1]}' ({_cache_raiz[0]})")
     return _cache_raiz
 
 
@@ -132,9 +135,17 @@ def resolver_id_foto(drive, ruta):
     if not segmentos:
         return None, "ruta vacía"
 
-    raiz = carpeta_raiz_fotos(drive)
+    raiz, raiz_nombre = carpeta_raiz_fotos(drive)
+
+    # Si la columna repite el nombre de la carpeta base al principio, se saltea.
+    # Pasa cuando se fija el ID de "Fotos Activación" y la planilla guarda
+    # "Fotos Activación/CAMPAÑA/LOCAL/Ingreso/foto.jpg": el prefijo ya está
+    # cubierto por la carpeta base y buscarlo de nuevo adentro falla siempre.
+    if len(segmentos) > 1 and normalizar(segmentos[0]) == normalizar(raiz_nombre):
+        segmentos = segmentos[1:]
+
     actual = raiz
-    recorrido = [NOMBRE_CARPETA_FOTOS_INGRESOS]
+    recorrido = [raiz_nombre]
     motivo = ""
 
     # Todos los segmentos menos el último son carpetas.
@@ -163,7 +174,7 @@ def resolver_id_foto(drive, ruta):
     if actual != raiz:
         file_id = _buscar_hijo(drive, raiz, archivo)
         if file_id:
-            return file_id, f"{NOMBRE_CARPETA_FOTOS_INGRESOS}/{archivo} (sin subcarpeta)"
+            return file_id, f"{raiz_nombre}/{archivo} (sin subcarpeta)"
 
     # Último recurso, desactivado por default: búsqueda global por nombre.
     # Es la que provoca traer la foto equivocada, así que solo se usa si se
@@ -177,7 +188,7 @@ def resolver_id_foto(drive, ruta):
                 f"({len(globales)} coincidencia/s). Puede NO ser la foto correcta."
             )
 
-    return None, motivo or f"no está '{archivo}' en '{NOMBRE_CARPETA_FOTOS_INGRESOS}'"
+    return None, motivo or f"no está '{archivo}' en '{raiz_nombre}'"
 
 
 def buscar_foto_ingreso(drive, ruta):
