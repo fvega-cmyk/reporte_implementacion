@@ -2,9 +2,22 @@
 Lee la hoja Actividades y deja SOLO las filas de Ingresos (Activación) que
 caen dentro de una semana ISO, agrupadas por campaña.
 
-Filtro doble:
+Filtro triple:
     ACTIVIDAD       = "Ingreso"
     TIPO ACTIVIDAD  = "Activación"
+    FECHA DEL INGRESO dentro de la semana (lunes a domingo)
+
+LA FECHA QUE MANDA
+------------------
+NO se usa FECHA_INICIO / FECHA_TERMINO. En activaciones esas dos columnas son
+el rango de la CAMPAÑA completa ("DEGUSTACIÓN OREO ... DE JUNIO A JULIO"), no
+la fecha del ingreso. Como ese rango se solapa con cualquier semana, filtrar
+por ahí metía toda la historia de la campaña en todas las semanas: una misma
+sala aparecía 5 veces, una por cada ingreso viejo.
+
+Se usa la fecha del evento: FECHA_ENTREGA, y si está vacía, la primera con
+valor de COLUMNAS_FECHA_INGRESO (reagenda, compromiso, tentativa). Eso cubre
+tanto los ingresos que sucedieron como los que debían suceder esa semana.
 
 Se reutiliza toda la maquinaria de leer_sheets.py (lectura, agrupación,
 canceladas, filtros manuales); acá solo cambia el criterio de filas.
@@ -22,6 +35,7 @@ from config import IDX
 from config_ingresos import (
     ACTIVIDAD_INGRESO,
     TIPOS_ACTIVIDAD_ACEPTADOS,
+    COLUMNAS_FECHA_INGRESO,
 )
 from utils import normalizar, parse_fecha
 
@@ -29,30 +43,22 @@ _ACTIVIDAD_OBJETIVO = normalizar(ACTIVIDAD_INGRESO)
 _TIPOS_OBJETIVO = {normalizar(t) for t in TIPOS_ACTIVIDAD_ACEPTADOS}
 
 
-def _fechas_de_fila(row):
+def fecha_de_ingreso(row):
     """
-    Determina el período [ini, ter] de una fila de Ingreso.
+    Fecha del ingreso de una fila. Devuelve (fecha, nombre_de_columna).
 
-    En la práctica muchas filas de activación traen solo una de las dos fechas,
-    así que se completa la que falte con la otra. Si no hay ninguna, la fila
-    no se puede ubicar en una semana y se descarta.
+    Recorre COLUMNAS_FECHA_INGRESO en orden y se queda con la primera que
+    tenga un valor parseable. Si ninguna tiene fecha, devuelve (None, None):
+    la fila no se puede ubicar en ninguna semana y se descarta.
     """
-    ini = parse_fecha(row[IDX["FECHA_INICIO"]])
-    ter = parse_fecha(row[IDX["FECHA_TERMINO"]])
-
-    if not ini and not ter:
-        # Último recurso: fecha tentativa (algunas filas se cargan así)
-        ini = ter = parse_fecha(row[IDX["FECHA_TENTATIVA"]])
-
-    if ini and not ter:
-        ter = ini
-    if ter and not ini:
-        ini = ter
-
-    if ini and ter and ter < ini:
-        ini, ter = ter, ini
-
-    return ini, ter
+    for columna in COLUMNAS_FECHA_INGRESO:
+        idx = IDX.get(columna)
+        if idx is None:
+            continue
+        fecha = parse_fecha(row[idx])
+        if fecha:
+            return fecha, columna
+    return None, None
 
 
 def es_fila_ingreso(row):
@@ -64,30 +70,40 @@ def es_fila_ingreso(row):
 
 def filtrar_ingresos(filas, desde, hasta):
     """
-    Filas de Ingreso cuyo período se SOLAPA con [desde, hasta].
+    Filas de Ingreso cuya FECHA DEL INGRESO cae dentro de [desde, hasta].
 
-    Solape (no "empieza dentro"): una activación de jueves a martes entra
-    tanto en la semana del jueves como en la del martes. Es a propósito: si
-    la actividad estuvo viva en la semana, corresponde informarla.
+    Es una fecha puntual, no un rango: el ingreso ocurrió (o debía ocurrir) un
+    día concreto y pertenece a esa semana y a ninguna otra.
     """
     activas = []
-    descartadas_sin_fecha = 0
+    sin_fecha = 0
+    fuera_semana = 0
+    por_columna = {}
 
     for row in filas:
         row = _rellenar(row)
         if not es_fila_ingreso(row):
             continue
 
-        ini, ter = _fechas_de_fila(row)
-        if not ini or not ter:
-            descartadas_sin_fecha += 1
+        fecha, columna = fecha_de_ingreso(row)
+        if not fecha:
+            sin_fecha += 1
             continue
 
-        if ini <= hasta and ter >= desde:
+        if desde <= fecha <= hasta:
             activas.append(row)
+            por_columna[columna] = por_columna.get(columna, 0) + 1
+        else:
+            fuera_semana += 1
 
-    if descartadas_sin_fecha:
-        print(f"  [AVISO] {descartadas_sin_fecha} fila(s) de Ingreso sin fecha usable. Se omiten.")
+    if activas:
+        detalle = ", ".join(f"{col}: {n}" for col, n in por_columna.items())
+        print(f"  Fecha usada para ubicar el ingreso → {detalle}")
+    if fuera_semana:
+        print(f"  {fuera_semana} fila(s) de Ingreso de otras semanas. Se omiten.")
+    if sin_fecha:
+        print(f"  [AVISO] {sin_fecha} fila(s) de Ingreso sin ninguna fecha de "
+              f"{', '.join(COLUMNAS_FECHA_INGRESO)}. Se omiten.")
 
     return activas
 
