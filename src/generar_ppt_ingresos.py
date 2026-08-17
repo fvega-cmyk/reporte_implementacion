@@ -40,6 +40,7 @@ Slide de local:
   [DIRECCIÓN], [COMUNA] - [REGION]    (combinado)
   [CÓD.] [COD] [ID LOCAL] [NOMBRE SALA] [DIRECCIÓN] [COMUNA] [REGION] [CADENA]
   [MARCA] [CATEGORIA] [EJECUTIVO] [ACTIVIDAD] [TIPO ACTIVIDAD] [SEMANA]
+  [FECHA INGRESO]  ← la fecha que define la semana (entrega, o el respaldo)
   [FECHA INICIO] [FECHA TERMINO] [FECHA ENTREGA] [FECHA COMPROMISO]
   [HORA INICIO] [HORA TERMINO] [OBSERVACIONES] [DETALLE]
   [FOTO 1] [FOTO 2]
@@ -70,6 +71,7 @@ from config_ingresos import (
     SUMAR_CANTIDADES_REPETIDAS,
 )
 from utils import fmt, parse_fecha
+from leer_sheets_ingresos import fecha_de_ingreso
 from fotos_ingresos import buscar_foto_ingreso
 from google_clients import get_drive
 
@@ -426,6 +428,19 @@ def _rango_fechas(filas, campo):
     return elegida.strftime("%d/%m/%Y")
 
 
+def _fecha_ingreso_local(filas):
+    """
+    Fecha del ingreso del local. Si las filas traen fechas distintas (raro,
+    pero pasa), se muestra el rango en vez de elegir una al azar.
+    """
+    fechas = sorted({f for f, _ in (fecha_de_ingreso(r) for r in filas) if f})
+    if not fechas:
+        return ""
+    if len(fechas) == 1:
+        return fechas[0].strftime("%d/%m/%Y")
+    return f"{fechas[0].strftime('%d/%m/%Y')} al {fechas[-1].strftime('%d/%m/%Y')}"
+
+
 def _primero_no_vacio(filas, campo):
     for r in filas:
         v = str(r[IDX[campo]] or "").strip()
@@ -480,6 +495,7 @@ def _tokens_local(filas, etiqueta_semana, items):
         ("[TOTAL MATERIALES]", str(len(items))),
         ("[NOMBRE SALA]", sala),
         ("[FECHA COMPROMISO]", _rango_fechas(filas, "FECHA_COMPROMISO")),
+        ("[FECHA INGRESO]", _fecha_ingreso_local(filas)),
         ("[FECHA TERMINO]", _rango_fechas(filas, "FECHA_TERMINO")),
         ("[FECHA ENTREGA]", _rango_fechas(filas, "FECHA_ENTREGA")),
         ("[FECHA INICIO]", _rango_fechas(filas, "FECHA_INICIO")),
