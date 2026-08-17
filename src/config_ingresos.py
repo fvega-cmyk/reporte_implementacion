@@ -30,6 +30,30 @@ TIPO_ACTIVIDAD_INGRESO = "Activación"
 TIPOS_ACTIVIDAD_ACEPTADOS = [TIPO_ACTIVIDAD_INGRESO]
 
 # ============================================================
+# QUÉ FECHA DEFINE LA SEMANA DE UN INGRESO
+# ============================================================
+# OJO, esto es lo que hace que el reporte sea semanal de verdad.
+#
+# NO se usa FECHA_INICIO / FECHA_TERMINO: en activaciones esas columnas son el
+# rango de la CAMPAÑA completa (ej. "de junio a julio"), no la fecha del
+# ingreso. Filtrar por ahí hace que toda la historia de la campaña entre en
+# todas las semanas, porque el rango se solapa siempre.
+#
+# Se usa la fecha del evento en sí: la primera de estas columnas que tenga
+# valor. FECHA_ENTREGA es la real; las siguientes cubren los que "debieron
+# suceder" pero todavía no tienen entrega cargada.
+#
+# Si querés que SOLO cuente la entrega real, dejá la lista con un solo
+# elemento: ["FECHA_ENTREGA"]. El log informa cuántas filas entraron por cada
+# columna, así podés ver si los respaldos están aportando o estorbando.
+COLUMNAS_FECHA_INGRESO = [
+    "FECHA_ENTREGA",
+    "FECHA_REAGENDA",
+    "FECHA_COMPROMISO",
+    "FECHA_TENTATIVA",
+]
+
+# ============================================================
 # TEMPLATE
 # ============================================================
 # El template vive en "Mi unidad" → carpeta "Templates_Reportes".
@@ -117,7 +141,7 @@ NOMBRE_CARPETA_FOTOS_INGRESOS = "Control Interno"
 # nombre. Se saca de la URL al abrir la carpeta en Drive:
 #   drive.google.com/drive/folders/ESTE_ES_EL_ID
 # Es lo más seguro si existe más de una carpeta llamada "Control Interno".
-CARPETA_FOTOS_INGRESOS_ID = "1afTrbQ-K8BlzJCY0NJxBGcP_eLyOXPU4"
+CARPETA_FOTOS_INGRESOS_ID = ""
 
 # Si no encuentra la foto en su ruta, ¿buscarla por nombre en TODO el Drive?
 #   False (default) → no. Mejor que falte una foto a que aparezca la de otra
