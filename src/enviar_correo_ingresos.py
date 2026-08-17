@@ -24,7 +24,6 @@ UMBRAL_BYTES = 22 * 1024 * 1024
 AZUL = "#1F3864"
 GRIS_TEXTO = "#333333"
 GRIS_SUAVE = "#666666"
-NARANJA = "#C43E1C"
 
 
 def _dedupe(correos):
@@ -45,22 +44,15 @@ def _parsear_destinatarios(valor):
     return _dedupe([c.strip() for c in crudos if c.strip()])
 
 
-def _fila_boton(texto, link, color):
-    return f"""
-        <tr><td style="padding:6px 0;">
-          <a href="{link}"
-             style="display:inline-block;background-color:{color};color:#ffffff;
-                    text-decoration:none;padding:10px 18px;border-radius:6px;
-                    font-weight:600;font-size:14px;">{texto}</a>
-        </td></tr>"""
-
-
 def _construir_html(etiqueta_semana, periodo_str, reportes, link_carpeta,
                     solo_link):
-    filas_botones = _fila_boton(f"📁 CARPETA {etiqueta_semana}", link_carpeta, AZUL)
-    for r in reportes:
-        filas_botones += _fila_boton(f"🖼️ {r['campana']}", r["link"], NARANJA)
+    """
+    Cuerpo del correo.
 
+    El listado de campañas ES la navegación: cada nombre enlaza a su PPT.
+    Abajo, un solo botón a la carpeta de la semana. No se repiten los archivos
+    como botones: con 24 campañas el correo se volvía una pared de botones.
+    """
     aviso = ""
     if solo_link:
         nombres = ", ".join(f"<strong>{c}</strong>" for c in solo_link)
@@ -68,12 +60,13 @@ def _construir_html(etiqueta_semana, periodo_str, reportes, link_carpeta,
       <p style="margin:0 0 18px;padding:12px 14px;background-color:#fff6e5;
                 border-left:4px solid #d98a00;font-size:13px;">
         Por límite de tamaño de correo, {nombres} no viene como adjunto.
-        Está completo en su link más abajo.
+        Está completo en su link más arriba.
       </p>"""
 
     lista = "".join(
-        f'<li style="margin-bottom:4px;">{r["campana"]} '
-        f'<span style="color:{GRIS_SUAVE};">({r["registros"]} registros)</span></li>'
+        f'<li style="margin-bottom:6px;">'
+        f'<a href="{r["link"]}" style="color:{AZUL};font-weight:600;'
+        f'text-decoration:underline;">{r["campana"]}</a></li>'
         for r in reportes
     )
 
@@ -115,7 +108,13 @@ def _construir_html(etiqueta_semana, periodo_str, reportes, link_carpeta,
         Todos los archivos quedan guardados en la carpeta de la semana:
       </p>
 
-      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">{filas_botones}
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;">
+        <tr><td style="padding:6px 0;">
+          <a href="{link_carpeta}"
+             style="display:inline-block;background-color:{AZUL};color:#ffffff;
+                    text-decoration:none;padding:10px 18px;border-radius:6px;
+                    font-weight:600;font-size:14px;">📁 CARPETA {etiqueta_semana}</a>
+        </td></tr>
       </table>
 
       <p style="margin:0;">Saludos.</p>
@@ -131,6 +130,7 @@ def _construir_html(etiqueta_semana, periodo_str, reportes, link_carpeta,
 
 
 def _texto_plano(etiqueta_semana, periodo_str, reportes, link_carpeta, solo_link):
+    """Versión sin formato: el link de cada campaña va debajo de su nombre."""
     lineas = [
         "Estimado equipo,",
         "",
@@ -140,14 +140,18 @@ def _texto_plano(etiqueta_semana, periodo_str, reportes, link_carpeta, solo_link
         f"Campañas incluidas ({len(reportes)}):",
     ]
     for i, r in enumerate(reportes, 1):
-        lineas.append(f"{i}. {r['campana']} ({r['registros']} registros)")
+        lineas.append(f"{i}. {r['campana']}")
+        lineas.append(f"   {r['link']}")
     if solo_link:
-        lineas += ["", "Por límite de tamaño, estos no van adjuntos (ver link): "
+        lineas += ["", "Por límite de tamaño, estos no van adjuntos (ver su link): "
                    + ", ".join(solo_link)]
-    lineas += ["", f"CARPETA {etiqueta_semana}: {link_carpeta}", ""]
-    for r in reportes:
-        lineas.append(f"- {r['campana']}: {r['link']}")
-    lineas += ["", "Saludos."]
+    lineas += [
+        "",
+        "Todos los archivos quedan guardados en la carpeta de la semana:",
+        f"CARPETA {etiqueta_semana}: {link_carpeta}",
+        "",
+        "Saludos.",
+    ]
     return "\n".join(lineas)
 
 
