@@ -90,12 +90,12 @@ PATRON_NOMBRE_PPT = "{campana}_SEMANA_{semana}-{anio}.pptx"
 ASUNTO_INGRESOS = "Reporte Semanal de Ingresos"
 
 CORREOS_INGRESOS = [
-    "fvega@sell-out.cl",
+    "fvega@sell-out.cl", "jparraguez@sell-out.cl", "bbaeza@sell-out.cl", "sescobedo@sell-out.cl"
     # TODO: agregar acá el resto del equipo que debe recibir el reporte.
 ]
 
 # Copia visible, si hiciera falta. Dejar vacío si no.
-CORREOS_INGRESOS_CC = []
+CORREOS_INGRESOS_CC = ["gchavarry@sell-out.cl","nmeza@sell-out.cl","mparra@sell-out.cl"]
 
 # ============================================================
 # UNA SLIDE POR LOCAL (no por material)
