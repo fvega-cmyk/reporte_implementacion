@@ -34,7 +34,7 @@ CORREOS_POR_CLIENTE = {
     "Wild Food":           ["msaavedra@sell-out.cl"],
     "Softys Professional": ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
     "Kraft":               ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "scanga@sell-out.cl"],
-    "Agrosuper":           ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "scanga@sell-out.cl", "lvaliente@sell-out.cl"],
+    "Agrosuper":           ["gcastillo@sell-out.cl", "mvargas@sell-out.cl", "lvaliente@sell-out.cl"],
     "Ariztía":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "scanga@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "NotCo":               ["msaavedra@sell-out.cl"],
     "Cleaner":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
