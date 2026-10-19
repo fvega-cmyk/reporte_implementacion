@@ -1,0 +1,194 @@
+name: Ingresos - Regenerar histórico (rango de semanas)
+
+# Regenera los PPT de VARIAS semanas en una sola corrida.
+#
+# Para qué existe: mientras el IDX leía columnas corridas, es_fila_ingreso()
+# nunca reconocía una fila de Ingreso, así que esas semanas terminaban en
+# "Sin ingresos para procesar" y la carpeta SEMANA XX - AAAA jamás se creó.
+# No hay nada que se arregle solo: hay que volver a generarlas.
+#
+# POR DEFECTO NO MANDA CORREO. Son semanas viejas: el equipo no necesita diez
+# correos de golpe. El envío hay que pedirlo explícitamente.
+#
+# Uso: Actions → "Ingresos - Regenerar histórico" → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      semana_desde:
+        description: "N° de semana ISO inicial (ej: 33)"
+        required: true
+      semana_hasta:
+        description: "N° de semana ISO final, inclusive (ej: 42)"
+        required: true
+      anio:
+        description: "Año ISO de esas semanas (ej: 2026). Vacío = año en curso"
+        required: false
+        default: ""
+      enviar_correo:
+        description: "PELIGRO: manda un correo POR CADA semana del rango"
+        type: boolean
+        required: false
+        default: false
+      cliente:
+        description: "(Opcional) Solo campañas de este cliente"
+        required: false
+        default: ""
+      campana:
+        description: "(Opcional) Solo esta campaña"
+        required: false
+        default: ""
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Validar el rango
+        shell: bash
+        env:
+          IN_DESDE: ${{ inputs.semana_desde }}
+          IN_HASTA: ${{ inputs.semana_hasta }}
+          IN_ANIO: ${{ inputs.anio }}
+        run: |
+          set -euo pipefail
+
+          # Deben ser números: un "33a" acá se transformaría más abajo en un
+          # bucle infinito o en una llamada con argumentos basura.
+          for v in "$IN_DESDE" "$IN_HASTA"; do
+            if ! [[ "$v" =~ ^[0-9]+$ ]]; then
+              echo "::error::'$v' no es un número de semana válido."
+              exit 1
+            fi
+            if [ "$v" -lt 1 ] || [ "$v" -gt 53 ]; then
+              echo "::error::La semana $v está fuera del rango ISO (1 a 53)."
+              exit 1
+            fi
+          done
+
+          if [ -n "$IN_ANIO" ] && ! [[ "$IN_ANIO" =~ ^[0-9]{4}$ ]]; then
+            echo "::error::El año debe tener 4 dígitos."
+            exit 1
+          fi
+
+          if [ "$IN_DESDE" -gt "$IN_HASTA" ]; then
+            echo "::error::semana_desde ($IN_DESDE) es mayor que semana_hasta ($IN_HASTA)."
+            echo "::error::Este workflow no cruza de un año al otro. Corré dos veces:"
+            echo "::error::una hasta la semana 52/53 del año viejo y otra desde la 1 del nuevo."
+            exit 1
+          fi
+
+          TOTAL=$(( IN_HASTA - IN_DESDE + 1 ))
+          if [ "$TOTAL" -gt 30 ]; then
+            echo "::error::$TOTAL semanas es demasiado para una corrida."
+            echo "::error::Cada semana relee la planilla entera (32 mil filas). Partilo en tramos."
+            exit 1
+          fi
+          echo "Rango válido: $TOTAL semana(s)."
+
+      - name: Regenerar semana por semana
+        id: backfill
+        shell: bash
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          DRIVE_CARPETA_INGRESOS_ID: ${{ secrets.DRIVE_CARPETA_INGRESOS_ID }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          IN_DESDE: ${{ inputs.semana_desde }}
+          IN_HASTA: ${{ inputs.semana_hasta }}
+          IN_ANIO: ${{ inputs.anio }}
+          IN_ENVIAR: ${{ inputs.enviar_correo }}
+          IN_CLIENTE: ${{ inputs.cliente }}
+          IN_CAMPANA: ${{ inputs.campana }}
+        run: |
+          set -uo pipefail   # sin -e: una semana que falle no debe cortar el resto
+
+          ANIO="${IN_ANIO:-}"
+          if [ -z "$ANIO" ]; then
+            ANIO=$(date -u +%G)   # %G = año ISO, no el calendario
+            echo "Año no indicado, se usa el año ISO en curso: $ANIO"
+          fi
+
+          if [ "${IN_ENVIAR:-false}" = "true" ]; then
+            echo "::warning::enviar_correo está ACTIVO: se manda un correo por cada semana del rango."
+          fi
+
+          : > resumen.txt
+          FALLAS=0
+
+          for (( S=IN_DESDE; S<=IN_HASTA; S++ )); do
+            echo ""
+            echo "=============================================="
+            echo "   SEMANA $S - $ANIO"
+            echo "=============================================="
+
+            ARGS=(--semana "$S" --anio "$ANIO")
+            if [ "${IN_ENVIAR:-false}" = "true" ]; then
+              ARGS+=(--enviar)
+            fi
+            if [ -n "${IN_CLIENTE:-}" ]; then
+              ARGS+=(--cliente "$IN_CLIENTE")
+            fi
+            if [ -n "${IN_CAMPANA:-}" ]; then
+              ARGS+=(--campana "$IN_CAMPANA")
+            fi
+
+            python src/main_ingresos.py "${ARGS[@]}" 2>&1 | tee salida_semana.txt
+            CODIGO=${PIPESTATUS[0]}
+
+            # Se rescata del log la línea que dice qué campañas quedaron.
+            DETALLE=$(grep -E "Campañas a reportar|Sin ingresos para procesar" salida_semana.txt | tail -1)
+            DETALLE="${DETALLE:-(sin línea de resumen en el log)}"
+
+            if [ "$CODIGO" -eq 0 ]; then
+              echo "| SEMANA $S - $ANIO | OK | ${DETALLE} |" >> resumen.txt
+            else
+              echo "| SEMANA $S - $ANIO | **FALLÓ** (código $CODIGO) | ${DETALLE} |" >> resumen.txt
+              FALLAS=$(( FALLAS + 1 ))
+              echo "::warning::La semana $S falló. Se sigue con las demás."
+            fi
+          done
+
+          echo "fallas=$FALLAS" >> "$GITHUB_OUTPUT"
+          echo "anio=$ANIO" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar resumen del backfill
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Regeneración de ingresos"
+            echo ""
+            echo "Semanas ${{ inputs.semana_desde }} a ${{ inputs.semana_hasta }} de ${{ steps.backfill.outputs.anio }}"
+            echo ""
+            echo "| Semana | Resultado | Detalle |"
+            echo "| --- | --- | --- |"
+            cat resumen.txt 2>/dev/null || echo "| - | sin datos | el paso anterior no llegó a correr |"
+            echo ""
+            echo "Las semanas que digan \"Sin ingresos para procesar\" no tienen"
+            echo "filas de Ingreso/Activación con fecha en ese rango. Eso puede ser"
+            echo "correcto: no toda semana tiene activaciones."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reflejar el resultado real
+        if: always()
+        shell: bash
+        run: |
+          FALLAS="${{ steps.backfill.outputs.fallas }}"
+          if [ -n "$FALLAS" ] && [ "$FALLAS" != "0" ]; then
+            echo "::error::$FALLAS semana(s) fallaron. Revisá el resumen del job."
+            exit 1
+          fi
+          echo "Backfill completo sin fallas."
