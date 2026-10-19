@@ -2,6 +2,11 @@ gspread==6.1.2
 google-auth==2.34.0
 google-auth-oauthlib==1.2.1
 google-api-python-client==2.144.0
+# Se importan directo en google_clients.py para fijarle el timeout al
+# cliente de Drive. Vienen como dependencia de la línea de arriba, pero se
+# declaran para que el import no dependa de un detalle de resolución.
+google-auth-httplib2==0.2.0
+httplib2==0.22.0
 openpyxl==3.1.5
 python-pptx==1.0.2
 Pillow==10.4.0
