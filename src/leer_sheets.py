@@ -25,8 +25,7 @@ from config import (
     PROCESOS_CANCELADO, CANCELADAS_IGNORAR_VACIOS,
 )
 from utils import normalizar, parse_fecha
-
-ANCHO_MINIMO = max(IDX.values()) + 1
+from columnas import sincronizar_idx
 
 
 def leer_actividades():
@@ -39,13 +38,35 @@ def leer_actividades():
         return [], []
     headers = datos[0]
     filas = datos[1:]
+
+    # Acá se resuelve el IDX contra los encabezados REALES de la planilla.
+    # Todo lo que viene después (filtros, generadores, correos) usa el
+    # resultado de esta llamada. Si falta una columna obligatoria, corta acá
+    # con un error claro en vez de devolver cero filas más abajo.
+    sincronizar_idx(headers)
+
     return headers, filas
 
 
+def _ancho_minimo():
+    """
+    Ancho al que hay que rellenar cada fila.
+
+    Se calcula en cada llamada y no al importar el módulo, porque IDX recién
+    existe después de leer la planilla. El +1 deja lugar a la columna virtual
+    vacía donde apuntan los campos opcionales que la planilla no tiene.
+    """
+    import config
+    if config.ANCHO_FILA:
+        return config.ANCHO_FILA
+    return (max(IDX.values()) + 1) if IDX else 0
+
+
 def _rellenar(row):
-    """Padding por si la fila viene corta."""
-    if len(row) < ANCHO_MINIMO:
-        return row + [""] * (ANCHO_MINIMO - len(row))
+    """Padding por si la fila viene corta o por la columna virtual vacía."""
+    ancho = _ancho_minimo()
+    if len(row) < ancho:
+        return row + [""] * (ancho - len(row))
     return row
 
 
