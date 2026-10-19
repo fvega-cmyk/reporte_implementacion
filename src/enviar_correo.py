@@ -17,12 +17,11 @@ Variables de entorno:
   - GMAIL_APP_PASS: contraseña de aplicación
 """
 import os
-import time
 import smtplib
 from email.message import EmailMessage
 
-from config import (
-    SMTP_HOST, SMTP_PORT, ASUNTO_EMAIL, EMAIL_DESTINATARIO,
+from smtp_envio import enviar_mensaje, credenciales
+from config import ( ASUNTO_EMAIL, EMAIL_DESTINATARIO,
     CORREOS_FIJOS, CORREOS_POR_CLIENTE, CORREOS_IGNORAR,
     CORREOS_FIJOS_EXTERNO, CORREOS_POR_CLIENTE_EXTERNO,
 )
@@ -38,11 +37,6 @@ RESERVA_CUERPO = 512 * 1024
 UMBRAL_BYTES = int((LIMITE_GMAIL - RESERVA_CUERPO) * 3 / 4)   # ≈ 18,4 MB
 UMBRAL_EXCEL = int(UMBRAL_BYTES * 0.9)                        # ≈ 16,5 MB
 
-# Reintentos: Gmail corta la conexión de vez en cuando desde los runners de
-# GitHub, que comparten IP. Es transitorio.
-SMTP_INTENTOS = 4
-SMTP_ESPERA_INICIAL = 15
-SMTP_TIMEOUT = 120
 
 # Paleta Sell Out
 AZUL = "#1F3864"
@@ -189,54 +183,6 @@ def _texto_plano(campana, fecha_str, links, periodo_str=None):
     )
 
 
-_NO_REINTENTAR = (
-    smtplib.SMTPAuthenticationError,
-    smtplib.SMTPRecipientsRefused,
-)
-
-_REINTENTABLES = (
-    smtplib.SMTPServerDisconnected,
-    smtplib.SMTPConnectError,
-    smtplib.SMTPHeloError,
-    ConnectionError,
-    TimeoutError,
-    OSError,
-)
-
-
-def _enviar_con_reintentos(msg, destinatarios, gmail_user, gmail_pass):
-    """Manda el mensaje reintentando ante cortes de conexión (15s, 30s, 60s)."""
-    ultimo = None
-    for intento in range(1, SMTP_INTENTOS + 1):
-        try:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as s:
-                s.ehlo()
-                s.starttls()
-                s.ehlo()
-                s.login(gmail_user, gmail_pass)
-                s.send_message(msg, to_addrs=destinatarios)
-            if intento > 1:
-                print(f"        [EMAIL] enviado en el intento {intento}")
-            return
-
-        except _NO_REINTENTAR:
-            raise
-
-        except _REINTENTABLES as e:
-            ultimo = e
-            if intento == SMTP_INTENTOS:
-                break
-            espera = SMTP_ESPERA_INICIAL * (2 ** (intento - 1))
-            print(f"        [EMAIL] intento {intento}/{SMTP_INTENTOS} falló "
-                  f"({type(e).__name__}: {e}). Reintento en {espera}s...")
-            time.sleep(espera)
-
-    raise RuntimeError(
-        f"No se pudo enviar el correo después de {SMTP_INTENTOS} intentos. "
-        f"Último error: {type(ultimo).__name__}: {ultimo}"
-    ) from ultimo
-
-
 def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
                  tipo="interno", periodo=None,
                  solo_cliente=False, destinatarios=None):
@@ -263,10 +209,7 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
     fecha_archivo = hoy.strftime("%Y%m%d")
     cliente_limpio = (cliente or "").strip()
 
-    gmail_user = os.environ.get("GMAIL_USER")
-    gmail_pass = os.environ.get("GMAIL_APP_PASS")
-    if not gmail_user or not gmail_pass:
-        raise RuntimeError("Faltan variables GMAIL_USER / GMAIL_APP_PASS")
+    gmail_user, _ = credenciales()   # valida y limpia; la clave la usa smtp_envio
 
     # --- Resolver destinatarios ---
     cc = []
@@ -347,6 +290,6 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
 
     # Todos los destinatarios reales (To + CC) para el envío
     todos = to + cc
-    _enviar_con_reintentos(msg, todos, gmail_user, gmail_pass)
+    enviar_mensaje(msg, todos, prefijo="        ")
     print(f"  [EMAIL OK] ({tipo}) enviado a {len(todos)} destinatario(s)")
     return True
