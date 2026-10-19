@@ -106,26 +106,39 @@ CARPETA_TEMPLATES_ID = "1ojipqO8-SC_qSFDT16fwoGkQBRjR87S7"
 PREFIJO_TEMPLATE = "Template_Reporte_"
 
 # ============================================================
-# ÍNDICES DE COLUMNAS (espejo de IDX en tu Apps Script)
+# ÍNDICES DE COLUMNAS
 # ============================================================
-IDX = {
-    "ID_ACTIVIDAD": 0, "ID_CAMPANA": 1, "N_PRESUPUESTO": 2, "CAMPANA": 3,
-    "EJECUTIVO": 4, "CLIENTE": 5, "ID_LOCAL": 6, "CADENA": 7, "COD": 8,
-    "NOMBRE_SALA": 9, "DIRECCION": 10, "COMUNA": 11, "REGION": 12,
-    "MARCA": 13, "CATEGORIA": 14, "GUIA": 15, "SKU": 16, "MATERIAL": 17,
-    "CANTIDAD": 18, "FECHA_INICIO": 19, "FECHA_TERMINO": 20,
-    "FECHA_TENTATIVA": 21, "FECHA_ENTREGA": 22, "REAGENDA": 23,
-    "N_REAGENDA": 24, "FECHA_REAGENDA": 25, "FECHA_COMPROMISO": 26,
-    "HORA_INICIO": 27, "HORA_TERMINO": 28, "PROCESO": 29, "DETALLE": 30,
-    "OBSERVACIONES": 31, "LOGISTICO1": 32, "LOGISTICO2": 33,
-    "ACTIVIDAD": 34, "TIPO_ACTIVIDAD": 35,
-    "FOTO1": 36, "FOTO2": 37, "FOTO3": 38, "FOTO4": 39,
-    "VIDEO": 40, "TIPO_ENVIO": 41, "COURIER": 42, "OT": 43,
-    "SEGUIMIENTO": 44, "CREACION_PDF": 45, "INFORME_PDF": 46,
-}
+# ESTE DICCIONARIO SE LLENA SOLO, en tiempo de ejecución.
+#
+# Arranca vacío a propósito. Apenas leer_sheets.leer_actividades() lee la
+# planilla, columnas.sincronizar_idx() lo rellena buscando cada campo por el
+# NOMBRE de su encabezado (fila 1), no por posición.
+#
+# Por qué: antes las posiciones estaban escritas a mano acá. Al insertar
+# columnas en la planilla, todo lo que estaba a la derecha se corría y el
+# código leía la columna de al lado sin dar error: devolvía "0 filas" como si
+# ese fuera el resultado correcto. Ahora podés insertar o mover columnas sin
+# tocar el código, y si falta una columna obligatoria el proceso corta con un
+# mensaje que dice cuál.
+#
+# Los nombres de encabezado que se buscan están en src/columnas.py (ALIAS).
+# Si tu planilla usa otro nombre, agregalo ahí.
+#
+# NO escribas índices acá a mano: se sobrescriben al leer la planilla.
+IDX = {}
 
-INDICES_FECHA = [19, 20, 21, 22, 25, 26]
-INDICES_FOTO = [36, 37, 38, 39]
+# Ancho al que se rellena cada fila. También lo setea sincronizar_idx().
+ANCHO_FILA = 0
+
+# ============================================================
+# ESCAPE MANUAL (normalmente vacío)
+# ============================================================
+# Si un campo no se resuelve por nombre (encabezado raro, dos columnas que se
+# llaman parecido), fijá acá su posición 0-based y gana sobre la búsqueda.
+# Ejemplo:  COLUMNAS_OVERRIDE = {"FECHA_COMPROMISO": 28}
+# Ojo: esto vuelve a atarte a la posición para ESE campo. Es un parche de
+# emergencia, no la forma normal de configurar.
+COLUMNAS_OVERRIDE = {}
 
 # URL base para construir el link público de las fotos (AppSheet)
 FOTO_URL_BASE = (
