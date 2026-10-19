@@ -1,0 +1,78 @@
+name: Diagnóstico de correo
+
+# Prueba SOLO el envío de correo. No lee la planilla, no genera reportes, no
+# toca Drive. Corre en segundos en vez de los 7 minutos que tarda el flujo de
+# ingresos en llegar al paso del correo.
+#
+# Responde tres preguntas:
+#   - ¿Los secrets están bien guardados?
+#   - ¿Se puede conectar a Gmail por 587 y por 465?
+#   - ¿El login funciona?
+#
+# Nunca imprime la contraseña: solo su largo y si tiene caracteres raros.
+
+on:
+  workflow_dispatch:
+    inputs:
+      enviar_a:
+        description: "(Opcional) Correo donde mandar una prueba de 1 KB. Vacío = solo conectar"
+        required: false
+        default: ""
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Probar el correo
+        id: diag
+        shell: bash
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          IN_ENVIAR_A: ${{ inputs.enviar_a }}
+        run: |
+          set -o pipefail
+          set +e
+
+          ARGS=()
+          if [ -n "${IN_ENVIAR_A:-}" ]; then
+            ARGS+=(--enviar "$IN_ENVIAR_A")
+          fi
+
+          python src/diagnostico_correo.py "${ARGS[@]+${ARGS[@]}}" 2>&1 | tee correo.txt
+          echo "codigo=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar resultado en el resumen
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Diagnóstico de correo"
+            echo ""
+            echo '```text'
+            cat correo.txt 2>/dev/null || echo "(sin salida)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reflejar el resultado real
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.diag.outputs.codigo }}" != "0" ]; then
+            echo "::error::El diagnóstico de correo falló. Revisá el resumen del job."
+            exit 1
+          fi
+          echo "Correo OK."
