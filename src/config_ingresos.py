@@ -96,7 +96,7 @@ CORREOS_INGRESOS = [
 
 # Copia visible, si hiciera falta. Dejar vacío si no.
 CORREOS_INGRESOS_CC = ["fmorales.sellout@gmail.com","diego.mejiasgonzalez@gmail.com","priscilasilvavalenzuela1998@gmail.com","ayevenes1999@gmail.com","josecastroastorga@gmail.com",
-                       "catalinaguzman.treid@gmail.com","isidoraalarconriquelme@gmail.com","heliamenese2224@gmail.com","vsanmartin@sell-out.cl"]
+                       "catalinaguzman.treid@gmail.com","isidoraalarconriquelme@gmail.com","heliamenese2224@gmail.com","vsanmartin@sell-out.cl","amoreno@sell-out.cl"]
 
 # ============================================================
 # UNA SLIDE POR LOCAL (no por material)
