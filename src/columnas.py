@@ -54,7 +54,8 @@ ALIAS = {
     "REGION":           ["region"],
     "MARCA":            ["marca"],
     "CATEGORIA":        ["categoria"],
-    "GUIA":             ["n guia", "no guia", "numero guia", "guia"],
+    "GUIA":             ["n guia de despacho", "guia de despacho",
+                         "n guia", "no guia", "numero guia", "guia"],
     "SKU":              ["sku"],
     "MATERIAL":         ["material"],
     "CANTIDAD":         ["cantidad"],
@@ -63,7 +64,8 @@ ALIAS = {
     "FECHA_TENTATIVA":  ["fecha tentativa", "fecha de tentativa"],
     "FECHA_ENTREGA":    ["fecha entrega", "fecha de entrega"],
     "REAGENDA":         ["reagenda", "se reagenda", "reagendamiento"],
-    "N_REAGENDA":       ["n reagenda", "no reagenda", "numero reagenda"],
+    "N_REAGENDA":       ["n de reagenda", "n reagenda", "no reagenda",
+                         "numero de reagenda", "numero reagenda"],
     "FECHA_REAGENDA":   ["fecha reagenda", "fecha de reagenda"],
     "FECHA_COMPROMISO": ["fecha compromiso", "fecha de compromiso"],
     "HORA_INICIO":      ["hora inicio", "hora de inicio"],
@@ -125,6 +127,17 @@ def letra_columna(i):
     return letras
 
 
+# Palabras de relleno que no aportan significado al nombre de una columna.
+# La planilla mezcla "FECHA DE INICIO" con "FECHA TENTATIVA" y "N° DE REAGENDA"
+# con "N° GUIA": ignorarlas evita tener que escribir las dos variantes de cada
+# nombre en ALIAS.
+_CONECTORES = {"de", "del", "la", "el", "los", "las"}
+
+
+def _sin_conectores(texto):
+    return " ".join(p for p in texto.split() if p not in _CONECTORES)
+
+
 def _buscar(limpios, nombres):
     """
     Busca un campo entre los encabezados. Devuelve (indice, modo).
@@ -143,15 +156,27 @@ def _buscar(limpios, nombres):
             if h == nombre:
                 return i, "exacto"
 
+    # Igual que la anterior, pero ignorando "de", "del", "la"...
+    # "N° DE REAGENDA" matchea el alias "n reagenda" sin tener que escribirlo.
+    reducidos = [_sin_conectores(h) for h in limpios]
     for nombre in nombres:
-        candidatos = [i for i, h in enumerate(limpios) if h and h.startswith(nombre)]
+        objetivo = _sin_conectores(nombre)
+        for i, h in enumerate(reducidos):
+            if h and h == objetivo:
+                return i, "exacto"
+
+    for nombre in nombres:
+        objetivo = _sin_conectores(nombre)
+        candidatos = [i for i, h in enumerate(reducidos)
+                      if h and h.startswith(objetivo)]
         if len(candidatos) == 1:
             return candidatos[0], "prefijo"
         if len(candidatos) > 1:
             return None, "ambiguo"
 
     for nombre in nombres:
-        candidatos = [i for i, h in enumerate(limpios) if h and nombre in h]
+        objetivo = _sin_conectores(nombre)
+        candidatos = [i for i, h in enumerate(reducidos) if h and objetivo in h]
         if len(candidatos) == 1:
             return candidatos[0], "contiene"
         if len(candidatos) > 1:
