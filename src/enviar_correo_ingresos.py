@@ -15,11 +15,11 @@ vez en cuando desde los runners de GitHub.
 Variables de entorno: GMAIL_USER, GMAIL_APP_PASS
 """
 import os
-import time
 import smtplib
 from email.message import EmailMessage
 
-from config import SMTP_HOST, SMTP_PORT, CORREOS_IGNORAR
+from config import CORREOS_IGNORAR
+from smtp_envio import enviar_mensaje, credenciales
 from config_ingresos import (
     ASUNTO_INGRESOS, CORREOS_INGRESOS, CORREOS_INGRESOS_CC,
 )
@@ -39,17 +39,6 @@ LIMITE_GMAIL = 25 * 1024 * 1024
 RESERVA_CUERPO = 512 * 1024          # HTML + texto plano + headers
 UMBRAL_BYTES = int((LIMITE_GMAIL - RESERVA_CUERPO) * 3 / 4)   # ≈ 18,4 MB
 
-# ============================================================
-# REINTENTOS DE SMTP
-# ============================================================
-# Gmail a veces corta la conexión durante el AUTH, sobre todo desde los
-# runners de GitHub, que comparten IP entre muchísimos proyectos. Es
-# transitorio: reintentar con una espera creciente lo resuelve.
-# Perder el correo después de generar 19 PPT (casi 4 minutos de trabajo)
-# por un corte de un segundo no tiene sentido.
-SMTP_INTENTOS = 4
-SMTP_ESPERA_INICIAL = 15     # segundos; se duplica en cada reintento
-SMTP_TIMEOUT = 120           # sin esto, un socket colgado espera para siempre
 
 AZUL = "#1F3864"
 GRIS_TEXTO = "#333333"
@@ -188,60 +177,6 @@ def _texto_plano(etiqueta_semana, periodo_str, reportes, link_carpeta, solo_link
 # Errores donde reintentar NO sirve y puede hacer daño:
 # credenciales malas (reintentar puede hacer que Gmail bloquee la cuenta) o
 # destinatario inválido. Se dejan explotar en el primer intento.
-_NO_REINTENTAR = (
-    smtplib.SMTPAuthenticationError,
-    smtplib.SMTPRecipientsRefused,
-)
-
-# Cortes de conexión: transitorios, se reintentan.
-_REINTENTABLES = (
-    smtplib.SMTPServerDisconnected,
-    smtplib.SMTPConnectError,
-    smtplib.SMTPHeloError,
-    ConnectionError,
-    TimeoutError,
-    OSError,
-)
-
-
-def _enviar_con_reintentos(msg, destinatarios, gmail_user, gmail_pass):
-    """
-    Manda el mensaje reintentando ante cortes de conexión.
-
-    Espera 15s, 30s, 60s entre intentos. Lanza la última excepción si se
-    agotan, para que main_ingresos la registre como error del job.
-    """
-    ultimo = None
-    for intento in range(1, SMTP_INTENTOS + 1):
-        try:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as s:
-                s.ehlo()
-                s.starttls()
-                s.ehlo()          # obligatorio: el EHLO se renegocia tras TLS
-                s.login(gmail_user, gmail_pass)
-                s.send_message(msg, to_addrs=destinatarios)
-            if intento > 1:
-                print(f"  [EMAIL] enviado en el intento {intento}")
-            return
-
-        except _NO_REINTENTAR:
-            raise
-
-        except _REINTENTABLES as e:
-            ultimo = e
-            if intento == SMTP_INTENTOS:
-                break
-            espera = SMTP_ESPERA_INICIAL * (2 ** (intento - 1))
-            print(f"  [EMAIL] intento {intento}/{SMTP_INTENTOS} falló "
-                  f"({type(e).__name__}: {e}). Reintento en {espera}s...")
-            time.sleep(espera)
-
-    raise RuntimeError(
-        f"No se pudo enviar el correo después de {SMTP_INTENTOS} intentos. "
-        f"Último error: {type(ultimo).__name__}: {ultimo}"
-    ) from ultimo
-
-
 def enviar_email_ingresos(etiqueta_semana, lunes, domingo, reportes,
                           link_carpeta, destinatarios=None):
     """
@@ -255,10 +190,7 @@ def enviar_email_ingresos(etiqueta_semana, lunes, domingo, reportes,
 
     Devuelve True si se envió.
     """
-    gmail_user = os.environ.get("GMAIL_USER")
-    gmail_pass = os.environ.get("GMAIL_APP_PASS")
-    if not gmail_user or not gmail_pass:
-        raise RuntimeError("Faltan variables GMAIL_USER / GMAIL_APP_PASS")
+    gmail_user, _ = credenciales()   # valida y limpia; la clave la usa smtp_envio
 
     if not reportes:
         print("  [EMAIL] Sin reportes en la semana → no se envía correo.")
@@ -313,6 +245,6 @@ def enviar_email_ingresos(etiqueta_semana, lunes, domingo, reportes,
         )
 
     todos = to + cc
-    _enviar_con_reintentos(msg, todos, gmail_user, gmail_pass)
+    enviar_mensaje(msg, todos, prefijo="  ")
     print(f"  [EMAIL OK] enviado a {len(todos)} destinatario(s)")
     return True
