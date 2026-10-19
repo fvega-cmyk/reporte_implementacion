@@ -4,13 +4,18 @@ Envía UN SOLO correo semanal con todos los PPT de Ingresos de la semana.
 A diferencia del flujo de Implementación (un correo por campaña), acá se
 consolida todo: un correo, N adjuntos, uno por campaña.
 
-Manejo de peso: Gmail corta en 25 MB. Se adjunta en orden hasta llegar al
-umbral; los PPT que no entran quedan solo con su link a Drive y el correo lo
-dice explícitamente, para que nadie asuma que falta información.
+Manejo de peso: Gmail corta en 25 MB YA CODIFICADOS. Como base64 infla un 33%,
+el presupuesto en bytes crudos es de ~18,4 MB. Se adjunta en orden hasta
+llegar al umbral; los PPT que no entran quedan solo con su link a Drive y el
+correo lo dice explícitamente, para que nadie asuma que falta información.
+
+Envío: con reintentos y espera creciente, porque Gmail corta la conexión de
+vez en cuando desde los runners de GitHub.
 
 Variables de entorno: GMAIL_USER, GMAIL_APP_PASS
 """
 import os
+import time
 import smtplib
 from email.message import EmailMessage
 
@@ -19,7 +24,32 @@ from config_ingresos import (
     ASUNTO_INGRESOS, CORREOS_INGRESOS, CORREOS_INGRESOS_CC,
 )
 
-UMBRAL_BYTES = 22 * 1024 * 1024
+# ============================================================
+# PRESUPUESTO DE TAMAÑO
+# ============================================================
+# Gmail rechaza los mensajes de más de 25 MB YA CODIFICADOS, y los adjuntos
+# viajan en base64, que infla un 33% (4 bytes por cada 3). El umbral viejo
+# eran 22 MB de bytes crudos, que en el cable son 29,3 MB: por encima del
+# límite. El correo se armaba, se mandaba y Gmail lo rechazaba.
+#
+# Por eso el presupuesto se calcula al revés: se parte del límite real, se
+# reserva lugar para el cuerpo HTML y los headers, y recién ahí se convierte
+# a bytes crudos.
+LIMITE_GMAIL = 25 * 1024 * 1024
+RESERVA_CUERPO = 512 * 1024          # HTML + texto plano + headers
+UMBRAL_BYTES = int((LIMITE_GMAIL - RESERVA_CUERPO) * 3 / 4)   # ≈ 18,4 MB
+
+# ============================================================
+# REINTENTOS DE SMTP
+# ============================================================
+# Gmail a veces corta la conexión durante el AUTH, sobre todo desde los
+# runners de GitHub, que comparten IP entre muchísimos proyectos. Es
+# transitorio: reintentar con una espera creciente lo resuelve.
+# Perder el correo después de generar 19 PPT (casi 4 minutos de trabajo)
+# por un corte de un segundo no tiene sentido.
+SMTP_INTENTOS = 4
+SMTP_ESPERA_INICIAL = 15     # segundos; se duplica en cada reintento
+SMTP_TIMEOUT = 120           # sin esto, un socket colgado espera para siempre
 
 AZUL = "#1F3864"
 GRIS_TEXTO = "#333333"
@@ -155,6 +185,63 @@ def _texto_plano(etiqueta_semana, periodo_str, reportes, link_carpeta, solo_link
     return "\n".join(lineas)
 
 
+# Errores donde reintentar NO sirve y puede hacer daño:
+# credenciales malas (reintentar puede hacer que Gmail bloquee la cuenta) o
+# destinatario inválido. Se dejan explotar en el primer intento.
+_NO_REINTENTAR = (
+    smtplib.SMTPAuthenticationError,
+    smtplib.SMTPRecipientsRefused,
+)
+
+# Cortes de conexión: transitorios, se reintentan.
+_REINTENTABLES = (
+    smtplib.SMTPServerDisconnected,
+    smtplib.SMTPConnectError,
+    smtplib.SMTPHeloError,
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
+
+
+def _enviar_con_reintentos(msg, destinatarios, gmail_user, gmail_pass):
+    """
+    Manda el mensaje reintentando ante cortes de conexión.
+
+    Espera 15s, 30s, 60s entre intentos. Lanza la última excepción si se
+    agotan, para que main_ingresos la registre como error del job.
+    """
+    ultimo = None
+    for intento in range(1, SMTP_INTENTOS + 1):
+        try:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as s:
+                s.ehlo()
+                s.starttls()
+                s.ehlo()          # obligatorio: el EHLO se renegocia tras TLS
+                s.login(gmail_user, gmail_pass)
+                s.send_message(msg, to_addrs=destinatarios)
+            if intento > 1:
+                print(f"  [EMAIL] enviado en el intento {intento}")
+            return
+
+        except _NO_REINTENTAR:
+            raise
+
+        except _REINTENTABLES as e:
+            ultimo = e
+            if intento == SMTP_INTENTOS:
+                break
+            espera = SMTP_ESPERA_INICIAL * (2 ** (intento - 1))
+            print(f"  [EMAIL] intento {intento}/{SMTP_INTENTOS} falló "
+                  f"({type(e).__name__}: {e}). Reintento en {espera}s...")
+            time.sleep(espera)
+
+    raise RuntimeError(
+        f"No se pudo enviar el correo después de {SMTP_INTENTOS} intentos. "
+        f"Último error: {type(ultimo).__name__}: {ultimo}"
+    ) from ultimo
+
+
 def enviar_email_ingresos(etiqueta_semana, lunes, domingo, reportes,
                           link_carpeta, destinatarios=None):
     """
@@ -200,7 +287,10 @@ def enviar_email_ingresos(etiqueta_semana, lunes, domingo, reportes,
         else:
             solo_link.append(r["campana"])
 
-    print(f"  [EMAIL] {len(adjuntar)} adjunto(s), {acumulado/1024/1024:.1f} MB total"
+    codificado = acumulado * 4 / 3
+    print(f"  [EMAIL] {len(adjuntar)} adjunto(s), {acumulado/1024/1024:.1f} MB "
+          f"crudos → {codificado/1024/1024:.1f} MB en base64 "
+          f"(tope {LIMITE_GMAIL/1024/1024:.0f} MB)"
           + (f" | solo link: {', '.join(solo_link)}" if solo_link else ""))
 
     msg = EmailMessage()
@@ -223,9 +313,6 @@ def enviar_email_ingresos(etiqueta_semana, lunes, domingo, reportes,
         )
 
     todos = to + cc
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
-        s.starttls()
-        s.login(gmail_user, gmail_pass)
-        s.send_message(msg, to_addrs=todos)
+    _enviar_con_reintentos(msg, todos, gmail_user, gmail_pass)
     print(f"  [EMAIL OK] enviado a {len(todos)} destinatario(s)")
     return True
