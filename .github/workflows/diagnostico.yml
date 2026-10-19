@@ -1,0 +1,92 @@
+name: Diagnóstico de columnas
+
+# Workflow SOLO manual y de SOLO LECTURA.
+# No genera archivos, no sube nada a Drive, no manda correos. Únicamente lee la
+# fila de encabezados de la hoja Actividades y te muestra a qué columna quedó
+# apuntando cada campo del código.
+#
+# Corrélo cuando:
+#   - agregues, muevas o renombres columnas en la planilla;
+#   - un reporte devuelva menos filas de las esperadas (o cero);
+#   - otro workflow corte con el error "No se encontraron estas columnas
+#     OBLIGATORIAS".
+#
+# Uso: pestaña Actions → "Diagnóstico de columnas" → "Run workflow".
+# El resultado aparece en el RESUMEN del job (no hace falta abrir el log) y
+# además queda como archivo descargable en Artifacts.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Correr diagnóstico
+        id: diag
+        shell: bash
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          set -o pipefail
+          set +e   # no cortar acá: si el script falla, igual queremos ver su salida
+          python src/diagnostico_columnas.py 2>&1 | tee diagnostico.txt
+          CODIGO=${PIPESTATUS[0]}
+          echo "codigo=$CODIGO" >> "$GITHUB_OUTPUT"
+          echo "Código de salida del diagnóstico: $CODIGO"
+
+      - name: Publicar resultado en el resumen del job
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Diagnóstico de columnas"
+            echo ""
+            if [ "${{ steps.diag.outputs.codigo }}" = "0" ]; then
+              echo "El diagnóstico corrió completo."
+            else
+              echo "**El diagnóstico cortó con error.** Lo más probable es que falte"
+              echo "una columna obligatoria: el detalle está abajo, con la lista de"
+              echo "los encabezados que sí tiene la planilla."
+            fi
+            echo ""
+            echo '```text'
+            cat diagnostico.txt 2>/dev/null || echo "(sin salida: el paso anterior no llegó a ejecutarse)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar salida como artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-columnas
+          path: diagnostico.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Reflejar el resultado real
+        if: always()
+        shell: bash
+        run: |
+          # El paso del diagnóstico no corta para poder capturar su salida.
+          # Acá sí marcamos el job como fallido si el script falló, para que el
+          # ícono rojo en Actions diga la verdad.
+          CODIGO="${{ steps.diag.outputs.codigo }}"
+          if [ "$CODIGO" != "0" ]; then
+            echo "::error::El diagnóstico falló (código $CODIGO). Revisá el resumen del job."
+            exit 1
+          fi
+          echo "Diagnóstico OK."
