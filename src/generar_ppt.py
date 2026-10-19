@@ -25,7 +25,8 @@ except ImportError:
 
 from googleapiclient.http import MediaIoBaseDownload
 
-from config import IDX, TEMPLATE_PPT_ID, CARPETA_TEMPLATES_ID, PREFIJO_TEMPLATE
+from config import (IDX, TEMPLATE_PPT_ID, CARPETA_TEMPLATES_ID,
+                    PREFIJO_TEMPLATE, REINTENTOS_DRIVE)
 from utils import fmt, san, buscar_foto_blob
 from google_clients import get_drive
 
@@ -127,7 +128,7 @@ def _buscar_template_id_por_cliente(drive, cliente):
             fields="files(id, name)",
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         archivos = resp.get("files", [])
         if archivos:
             print(f"  [TEMPLATE] ✓ Encontrado en carpeta: '{archivos[0]['name']}' ({archivos[0]['id']})")
@@ -145,7 +146,7 @@ def _buscar_template_id_por_cliente(drive, cliente):
             fields="files(id, name, parents)",
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         archivos2 = resp2.get("files", [])
         if archivos2:
             print(f"  [TEMPLATE] ✓ Encontrado (global): '{archivos2[0]['name']}' ({archivos2[0]['id']})")
@@ -169,7 +170,7 @@ def _descargar_template_como_pptx(template_id=None):
     downloader = MediaIoBaseDownload(buf, req)
     done = False
     while not done:
-        _, done = downloader.next_chunk()
+        _, done = downloader.next_chunk(num_retries=REINTENTOS_DRIVE)
     buf.seek(0)
     return buf
 

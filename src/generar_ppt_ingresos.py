@@ -61,7 +61,7 @@ from pptx import Presentation
 from PIL import Image
 from googleapiclient.http import MediaIoBaseDownload
 
-from config import IDX
+from config import IDX, REINTENTOS_DRIVE
 from config_ingresos import (
     NOMBRE_TEMPLATE_INGRESOS,
     NOMBRE_CARPETA_TEMPLATES,
@@ -112,7 +112,7 @@ def _buscar_template_ingresos(drive):
     if id_fijo:
         info = drive.files().get(
             fileId=id_fijo, fields="id, name, mimeType", supportsAllDrives=True
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         print(f"  [TEMPLATE] ID fijo: '{info['name']}' ({info['id']})")
         return info["id"], info["mimeType"]
 
@@ -126,14 +126,14 @@ def _buscar_template_ingresos(drive):
             q=f"name = '{carpeta_q}' and mimeType = '{MIME_FOLDER}' and trashed = false",
             fields="files(id, name)",
             supportsAllDrives=True, includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         for carpeta in resp.get("files", []):
             resp2 = drive.files().list(
                 q=(f"name = '{nombre_q}' and '{carpeta['id']}' in parents "
                    f"and trashed = false"),
                 fields="files(id, name, mimeType)",
                 supportsAllDrives=True, includeItemsFromAllDrives=True,
-            ).execute()
+            ).execute(num_retries=REINTENTOS_DRIVE)
             archivos = resp2.get("files", [])
             if archivos:
                 a = archivos[0]
@@ -148,7 +148,7 @@ def _buscar_template_ingresos(drive):
         q=f"name = '{nombre_q}' and trashed = false",
         fields="files(id, name, mimeType)",
         supportsAllDrives=True, includeItemsFromAllDrives=True,
-    ).execute()
+    ).execute(num_retries=REINTENTOS_DRIVE)
     archivos3 = resp3.get("files", [])
     if archivos3:
         a = archivos3[0]
@@ -172,7 +172,7 @@ def _descargar_template(drive, file_id, mime):
     downloader = MediaIoBaseDownload(buf, req)
     done = False
     while not done:
-        _, done = downloader.next_chunk()
+        _, done = downloader.next_chunk(num_retries=REINTENTOS_DRIVE)
     buf.seek(0)
     return buf
 

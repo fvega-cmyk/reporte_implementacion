@@ -9,7 +9,7 @@ from urllib.parse import quote
 from io import BytesIO
 
 from googleapiclient.http import MediaIoBaseDownload
-from config import FOTO_URL_BASE
+from config import FOTO_URL_BASE, REINTENTOS_DRIVE
 
 
 def ventana_semanal(hoy=None):
@@ -127,7 +127,7 @@ def buscar_foto_blob(drive_service, ruta):
         resp = drive_service.files().list(
             q=query, fields="files(id, name)", pageSize=1,
             supportsAllDrives=True, includeItemsFromAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         archivos = resp.get("files", [])
         if not archivos:
             return None
@@ -137,7 +137,7 @@ def buscar_foto_blob(drive_service, ruta):
         downloader = MediaIoBaseDownload(buf, req)
         done = False
         while not done:
-            _, done = downloader.next_chunk()
+            _, done = downloader.next_chunk(num_retries=REINTENTOS_DRIVE)
         buf.seek(0)
         return buf
     except Exception as e:

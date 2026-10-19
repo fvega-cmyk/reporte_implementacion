@@ -24,6 +24,7 @@ Las carpetas resueltas se cachean: 40 fotos en la misma subcarpeta hacen una
 sola llamada a la API para ubicarla.
 """
 import os
+from config import REINTENTOS_DRIVE
 from io import BytesIO
 
 from googleapiclient.http import MediaIoBaseDownload
@@ -57,7 +58,7 @@ def _listar(drive, q):
         pageSize=25,
         supportsAllDrives=True,
         includeItemsFromAllDrives=True,
-    ).execute().get("files", [])
+    ).execute(num_retries=REINTENTOS_DRIVE).get("files", [])
 
 
 def carpeta_raiz_fotos(drive):
@@ -78,7 +79,7 @@ def carpeta_raiz_fotos(drive):
     if id_fijo:
         info = drive.files().get(
             fileId=id_fijo, fields="id, name", supportsAllDrives=True
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         print(f"  [FOTOS] Carpeta base (ID fijo): '{info['name']}' ({info['id']})")
         _cache_raiz = (info["id"], info["name"])
         return _cache_raiz
@@ -217,7 +218,7 @@ def buscar_foto_ingreso(drive, ruta):
         downloader = MediaIoBaseDownload(buf, req)
         done = False
         while not done:
-            _, done = downloader.next_chunk()
+            _, done = downloader.next_chunk(num_retries=REINTENTOS_DRIVE)
         buf.seek(0)
         stats["ok"] += 1
         return buf

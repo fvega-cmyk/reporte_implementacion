@@ -18,6 +18,7 @@ correr N veces en la semana sin generar duplicados ni romper links ya enviados.
 Destino: DRIVE_CARPETA_INGRESOS_ID (env) o el default de config_ingresos.py.
 """
 import os
+from config import REINTENTOS_DRIVE
 from io import BytesIO
 
 from googleapiclient.http import MediaIoBaseUpload
@@ -45,7 +46,7 @@ def _drive_id_de(drive, folder_id):
     """
     info = drive.files().get(
         fileId=folder_id, fields="id, name, driveId", supportsAllDrives=True
-    ).execute()
+    ).execute(num_retries=REINTENTOS_DRIVE)
     return info.get("driveId")
 
 
@@ -61,7 +62,7 @@ def _listar(drive, q, drive_id):
     if drive_id:
         params["corpora"] = "drive"
         params["driveId"] = drive_id
-    return drive.files().list(**params).execute().get("files", [])
+    return drive.files().list(**params).execute(num_retries=REINTENTOS_DRIVE).get("files", [])
 
 
 def _buscar_o_crear_carpeta(drive, padre_id, drive_id, nombre):
@@ -76,7 +77,7 @@ def _buscar_o_crear_carpeta(drive, padre_id, drive_id, nombre):
     nueva = drive.files().create(
         body={"name": nombre, "mimeType": MIME_FOLDER, "parents": [padre_id]},
         fields="id", supportsAllDrives=True,
-    ).execute()
+    ).execute(num_retries=REINTENTOS_DRIVE)
     print(f"  [DRIVE] Carpeta creada: {nombre}")
     return nueva["id"]
 
@@ -131,21 +132,21 @@ def subir_ppt_semana(carpeta_id, drive_id, campana, semana, anio, ppt_bytes):
         archivo = drive.files().update(
             fileId=existente, media_body=media,
             fields="id, webViewLink", supportsAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         print(f"        [DRIVE] Actualizado: {nombre}")
     else:
         archivo = drive.files().create(
             body={"name": nombre, "parents": [carpeta_id]},
             media_body=media, fields="id, webViewLink",
             supportsAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         # Permiso público con link, solo la primera vez
         try:
             drive.permissions().create(
                 fileId=archivo["id"],
                 body={"type": "anyone", "role": "reader"},
                 supportsAllDrives=True,
-            ).execute()
+            ).execute(num_retries=REINTENTOS_DRIVE)
         except Exception as e:
             print(f"        [WARN] No se pudo dar permiso público: {e}")
         print(f"        [DRIVE] Creado: {nombre}")

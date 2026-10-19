@@ -25,7 +25,7 @@ from config import ( ASUNTO_EMAIL, EMAIL_DESTINATARIO,
     CORREOS_FIJOS, CORREOS_POR_CLIENTE, CORREOS_IGNORAR,
     CORREOS_FIJOS_EXTERNO, CORREOS_POR_CLIENTE_EXTERNO,
 )
-from utils import san
+from utils import san, normalizar
 
 # Gmail acepta 25 MB. Margen a 22 MB.
 # Gmail rechaza los mensajes de más de 25 MB YA CODIFICADOS. Los adjuntos
@@ -55,6 +55,42 @@ def _dedupe(correos):
         vistos.add(c)
         final.append(correo.strip())
     return final
+
+
+def _buscar_correos(mapa, cliente, etiqueta):
+    """
+    Busca los correos de un cliente sin depender de tildes ni mayúsculas.
+
+    Por qué no un `mapa.get(cliente)` directo: la clave de config.py y el
+    valor de la columna CLIENTE de la planilla los escriben personas
+    distintas en momentos distintos. "CCU Nestle" en el código y "CCU Nestlé"
+    en la planilla son el mismo cliente, pero un dict los ve como dos, y el
+    correo sale solo a los fijos sin que nadie se entere.
+
+    Primero prueba la coincidencia exacta; si no, compara normalizado.
+    Devuelve None si el cliente no está en el mapa (distinto de [], que
+    significa "está, pero sin correos propios").
+    """
+    exacto = mapa.get(cliente)
+    if exacto is not None:
+        return exacto
+
+    objetivo = normalizar(cliente)
+    coincidencias = [(k, v) for k, v in mapa.items() if normalizar(k) == objetivo]
+
+    if len(coincidencias) == 1:
+        clave, correos = coincidencias[0]
+        print(f"        [{etiqueta}] la planilla dice '{cliente}' y config.py "
+              f"dice '{clave}'. Se toma esa.")
+        return correos
+
+    if len(coincidencias) > 1:
+        nombres = ", ".join(k for k, _ in coincidencias)
+        print(f"        [{etiqueta}] '{cliente}' coincide con varias claves de "
+              f"config.py ({nombres}). Se ignoran todas: dejá una sola.")
+        return []
+
+    return None
 
 
 def _parsear_destinatarios(valor):
@@ -222,7 +258,8 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
         print(f"        [OVERRIDE] destinatarios manuales: {', '.join(to)}")
 
     elif tipo == "externo":
-        clientes_ext = _dedupe(CORREOS_POR_CLIENTE_EXTERNO.get(cliente_limpio, []))
+        encontrados = _buscar_correos(CORREOS_POR_CLIENTE_EXTERNO, cliente_limpio, "EXTERNO")
+        clientes_ext = _dedupe(encontrados or [])
         if not clientes_ext:
             print(f"        [EXTERNO] '{cliente_limpio}' sin destinatarios externos → se omite")
             return False
@@ -235,7 +272,14 @@ def enviar_email(campana, hoy, excel_bytes, ppt_bytes, links, cliente=None,
         mostrar_firma = False
 
     else:
-        del_cliente = _dedupe(CORREOS_POR_CLIENTE.get(cliente_limpio, []))
+        encontrados = _buscar_correos(CORREOS_POR_CLIENTE, cliente_limpio, "INTERNO")
+        if encontrados is None:
+            # El cliente no está en config.py. No es un error: el correo sale
+            # igual a los fijos. Pero se avisa, porque casi siempre significa
+            # que falta agregarlo (cliente nuevo, o escrito distinto).
+            print(f"        [INTERNO] '{cliente_limpio}' no está en "
+                  f"CORREOS_POR_CLIENTE. Va solo a los correos fijos.")
+        del_cliente = _dedupe(encontrados or [])
         if solo_cliente:
             # Omite los CORREOS_FIJOS: útil en reenvíos, para no volver a
             # notificar al equipo interno que ya recibió el correo.

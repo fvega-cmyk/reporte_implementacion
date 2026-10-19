@@ -6,8 +6,16 @@ Las credenciales se cargan desde la variable de entorno GOOGLE_CREDENTIALS_JSON
 import os
 import json
 import gspread
+import httplib2
+import google_auth_httplib2
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+
+# Timeout de cada request a Drive. Sin esto, httplib2 usa el default del
+# sistema: una descarga que se cuelga puede tardar muchísimo en rendirse, o
+# cortar en un momento arbitrario. Con un valor explícito, la que se pasa de
+# este tiempo falla rápido y el reintento (num_retries) la vuelve a pedir.
+TIMEOUT_DRIVE = 180
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -50,5 +58,10 @@ def get_drive():
     if _drive_service is None:
         if _creds is None:
             _creds = _cargar_credenciales()
-        _drive_service = build("drive", "v3", credentials=_creds, cache_discovery=False)
+        # Se arma el http a mano para poder fijarle el timeout. Con
+        # credentials= la librería crea uno interno que no se puede configurar.
+        http = google_auth_httplib2.AuthorizedHttp(
+            _creds, http=httplib2.Http(timeout=TIMEOUT_DRIVE)
+        )
+        _drive_service = build("drive", "v3", http=http, cache_discovery=False)
     return _drive_service

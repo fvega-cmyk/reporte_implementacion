@@ -131,6 +131,19 @@ IDX = {}
 ANCHO_FILA = 0
 
 # ============================================================
+# REINTENTOS CONTRA LA API DE DRIVE
+# ============================================================
+# Drive devuelve errores 500 "Internal Error" y corta descargas cada tanto,
+# sin razón ni patrón. Son fallas transitorias de Google, no del código.
+# Antes no se reintentaba nada: un timeout bajando el template de 790 KB
+# mataba la campaña entera, perdiendo sus 28 slides ya procesadas.
+#
+# La librería de Google trae reintentos con espera creciente incorporados,
+# pero hay que pedirlos explícitamente en cada llamada con num_retries.
+# El default es 0, o sea ninguno.
+REINTENTOS_DRIVE = 5
+
+# ============================================================
 # ESCAPE MANUAL (normalmente vacío)
 # ============================================================
 # Si un campo no se resuelve por nombre (encabezado raro, dos columnas que se

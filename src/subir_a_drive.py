@@ -19,6 +19,7 @@ Variable de entorno requerida:
   - DRIVE_CARPETA_REPORTES_ID: ID de la Unidad Compartida raíz.
 """
 import os
+from config import REINTENTOS_DRIVE
 from io import BytesIO
 
 from googleapiclient.http import MediaIoBaseUpload
@@ -37,7 +38,7 @@ def _get_drive_id(drive, padre_id):
         fileId=padre_id,
         fields="id, driveId",
         supportsAllDrives=True,
-    ).execute()
+    ).execute(num_retries=REINTENTOS_DRIVE)
     return info.get("driveId", padre_id)
 
 
@@ -52,7 +53,7 @@ def _buscar_carpeta(drive, padre_id, drive_id, nombre):
         q=q, fields="files(id, name)",
         supportsAllDrives=True, includeItemsFromAllDrives=True,
         corpora="drive", driveId=drive_id,
-    ).execute()
+    ).execute(num_retries=REINTENTOS_DRIVE)
     archivos = resp.get("files", [])
     return archivos[0]["id"] if archivos else None
 
@@ -72,7 +73,7 @@ def _buscar_o_crear_carpeta(drive, padre_id, drive_id, nombre):
     }
     nueva = drive.files().create(
         body=body, fields="id", supportsAllDrives=True,
-    ).execute()
+    ).execute(num_retries=REINTENTOS_DRIVE)
     return nueva["id"]
 
 
@@ -87,7 +88,7 @@ def _buscar_archivo(drive, carpeta_id, drive_id, nombre):
         includeItemsFromAllDrives=True,
         corpora="drive",
         driveId=drive_id,
-    ).execute()
+    ).execute(num_retries=REINTENTOS_DRIVE)
     archivos = resp.get("files", [])
     return archivos[0]["id"] if archivos else None
 
@@ -108,7 +109,7 @@ def _subir_o_actualizar(drive, carpeta_id, drive_id, nombre, contenido_bytes, mi
             media_body=media,
             fields="id, webViewLink",
             supportsAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         return archivo["id"], archivo.get("webViewLink", f"https://drive.google.com/file/d/{existente_id}/view")
     else:
         # Crear nuevo
@@ -118,14 +119,14 @@ def _subir_o_actualizar(drive, carpeta_id, drive_id, nombre, contenido_bytes, mi
             media_body=media,
             fields="id, webViewLink",
             supportsAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         file_id = archivo["id"]
         # Permiso público con link (solo la primera vez)
         drive.permissions().create(
             fileId=file_id,
             body={"type": "anyone", "role": "reader"},
             supportsAllDrives=True,
-        ).execute()
+        ).execute(num_retries=REINTENTOS_DRIVE)
         return file_id, archivo.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
 
 
@@ -174,7 +175,7 @@ def _descargar_archivo(drive, file_id):
     downloader = MediaIoBaseDownload(buf, req)
     done = False
     while not done:
-        _, done = downloader.next_chunk()
+        _, done = downloader.next_chunk(num_retries=REINTENTOS_DRIVE)
     buf.seek(0)
     return buf.getvalue()
 
