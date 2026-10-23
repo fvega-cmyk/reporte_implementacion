@@ -19,7 +19,7 @@ ASUNTO_EMAIL = "Reporte Diario Implementacion -"
 CORREOS_FIJOS = [
     "fvega@sell-out.cl",
     "jparraguez@sell-out.cl",
-    "fnunez@sell-out.cl",
+    "djorquera@sell-out.cl",
     "bbaeza@sell-out.cl"
 ]
 
