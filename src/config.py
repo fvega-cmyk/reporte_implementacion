@@ -17,16 +17,41 @@ ASUNTO_EMAIL = "Reporte Diario Implementacion -"
 # ============================================================
 # Correos que reciben TODAS las campañas, sin importar el cliente.
 CORREOS_FIJOS = [
-    "fvega@sell-out.cl"
+    "fvega@sell-out.cl",
+    "jparraguez@sell-out.cl",
+    "djorquera@sell-out.cl",
+    "bbaeza@sell-out.cl"
 ]
 
 # Correos que se SUMAN según el CLIENTE de la campaña.
 # El nombre del cliente debe coincidir con la columna CLIENTE de la planilla.
 CORREOS_POR_CLIENTE = {
+    "Mondelez":            ["msaavedra@sell-out.cl", "ralvarez@sell-out.cl", "edgardo.gonzalez@mdlz.com"],
+    "Softys":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Unilever":            ["dperera@sell-out.cl", "mjcarreno@sell-out.cl", "cleon@sell-out.cl"],
+    "Andina":              ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "jmeza@sell-out.cl"],
+    "Sofruco":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "jmeza@sell-out.cl"],
+    "Wild Food":           ["msaavedra@sell-out.cl", "ralvarez@sell-out.cl"],
+    "Softys Professional": ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl", "jmeza@sell-out.cl"],
+    "Kraft":               ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Agrosuper":           ["gcastillo@sell-out.cl", "mvargas@sell-out.cl", "lvaliente@sell-out.cl"],
+    "Ariztía":             ["gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
+    "NotCo":               ["msaavedra@sell-out.cl", "ralvarez@sell-out.cl"],
+    "Cleaner":             ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Kimberly Clark":      ["msaavedra@sell-out.cl", "ralvarez@sell-out.cl", "sophia.plaza@kcc.com"],
+    "BIC":                 ["pmunoz@sell-out.cl", "gcastillo@sell-out.cl"],
+    "Agricovial":          ["msaavedra@sell-out.cl", "ctorres@agricovial.cl", "vdiaz-valdes@agricovial.cl"],
+    "Krispy Kreme":        ["msaavedra@sell-out.cl"],
     "CCU":                 ["gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "CCU Nestle":          ["gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "CCU Pepsico":         ["gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "CCU Carozzi":         ["gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
+    "Gourmet":             ["gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
+    "Eucerin":             ["cchamorro@motionx.cl"],
+    # Clientes pendientes de configurar: NO se agregan destinatarios (solo van los fijos)
+    "Prosud":              [],
+    "Natura":              [],
+    "Crocs":               [],
 }
 
 # Correos placeholder que deben ignorarse si aparecieran en alguna lista.
@@ -43,8 +68,8 @@ CORREOS_FIJOS_EXTERNO = [
 
 CORREOS_POR_CLIENTE_EXTERNO = {
     "Softys": [
-        "ctoledo@softys.com",
-        "ctoledo@softysla.com",
+        "sabogabir@softys.com",
+        "araby@softys.com",
         "pmunoz@sell-out.cl",
         "gcastillo@sell-out.cl",
     ],
