@@ -17,10 +17,7 @@ ASUNTO_EMAIL = "Reporte Diario Implementacion -"
 # ============================================================
 # Correos que reciben TODAS las campañas, sin importar el cliente.
 CORREOS_FIJOS = [
-    "fvega@sell-out.cl",
-    "jparraguez@sell-out.cl",
-    "djorquera@sell-out.cl",
-    "bbaeza@sell-out.cl"
+    "fvega@sell-out.cl"
 ]
 
 # Correos que se SUMAN según el CLIENTE de la campaña.
