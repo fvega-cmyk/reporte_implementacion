@@ -72,6 +72,7 @@ CORREOS_POR_CLIENTE_EXTERNO = {
         "araby@softys.com",
         "pmunoz@sell-out.cl",
         "gcastillo@sell-out.cl",
+        "ncabezas@softysla.com"
     ],
 }
 
