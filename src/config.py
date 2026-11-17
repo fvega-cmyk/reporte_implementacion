@@ -49,7 +49,7 @@ CORREOS_POR_CLIENTE = {
     "Gourmet":             ["gcastillo@sell-out.cl", "dperera@sell-out.cl", "cleon@sell-out.cl"],
     "Eucerin":             ["cchamorro@motionx.cl"],
     # Clientes pendientes de configurar: NO se agregan destinatarios (solo van los fijos)
-    "Prosud":              [],
+    "Kelsen":              ["jmeza@sell-out.cl"],
     "Natura":              [],
     "Crocs":               [],
 }
